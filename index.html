@@ -99,14 +99,14 @@ function seedPositions(){return [
  P("2330","TW","台積電",10,1978.4,"TWD","國泰證券","Core","半導體/晶圓代工",["AI","Semiconductor","Foundry","CoWoS"],"A+",5,"Hold","定期定額"),
  P("4958","TW","臻鼎-KY",40,577.50,"TWD","國泰證券","Core","PCB/CCL",["PCB","CCL","AI Server","Supply Chain"],"A",4,"Buy Back","07/09 於595賣出33股,保留40股,回檔考慮補回"),
  // 美股 — 台幣交割 L607568
- PU("LAES","SEALSQ",50,2.8022,"台幣複委託 L607568","TWD","Satellite","量子/資安",["Quantum","Cybersecurity","High Risk Growth"],"B",3,"Hold","低流動性"),
+ PU("LAES","SEALSQ",50,2.8022,"台幣交割 L607568","TWD","Satellite","量子/資安",["Quantum","Cybersecurity","High Risk Growth"],"B",3,"Hold","低流動性"),
+ PU("KMEM","KMEM 記憶體ETF",20,22.85,"台幣交割 L607568","TWD","Tactical","ETF/記憶體",["Memory ETF","DRAM","NAND","HBM"],"B",3,"Take Profit","與 MU 重疊,MU 優先"),
+ PU("GFS","GlobalFoundries",5,66.584,"台幣交割 L607568","TWD","Core","半導體/晶圓代工",["Semiconductor","Foundry","AI Infrastructure"],"A",3,"Hold",""),
+ PU("MU","Micron 美光",3,966.403333,"台幣交割 L607568","TWD","Core","半導體/記憶體",["AI","HBM","DRAM","Memory"],"A+",4,"Hold","成本 USD 計價,台幣交割"),
  // 美股 — 外幣交割 G552118
- PU("LAES","SEALSQ",45,3.002444,"外幣帳戶 G552118","USD","Satellite","量子/資安",["Quantum","Cybersecurity","High Risk Growth"],"B",3,"Hold","低流動性"),
- PU("MU","Micron 美光",3,966.4033,"外幣帳戶 G552118","USD","Core","半導體/記憶體",["AI","HBM","DRAM","Memory"],"A+",4,"Hold","成本以USD計(區間對應手冊),交割幣別依券商"),
- PU("GFS","GlobalFoundries",5,66.584,"外幣帳戶 G552118","USD","Core","半導體/晶圓代工",["Semiconductor","Foundry","AI Infrastructure"],"A",3,"Hold",""),
- PU("KMEM","KMEM 記憶體ETF",20,22.85,"外幣帳戶 G552118","USD","Tactical","ETF/記憶體",["Memory ETF","DRAM","NAND","HBM"],"B",3,"Take Profit","與 MU 重疊,MU 優先"),
- PU("GLW","Corning 康寧",2,211.275,"外幣帳戶 G552118","USD","Exit Candidate","光通訊/玻璃",["AI Data Center","Optical","Glass"],"B-",2,"Watch","成本以USD計"),
- PU("SPCX","SPCX (SpaceX)",5,157.026,"外幣帳戶 G552118","USD","Satellite","太空",["SpaceX","Private Space","Event Driven"],"B",3,"Hold","")
+ PU("LAES","SEALSQ",45,3.002444,"外幣交割 G552118","USD","Satellite","量子/資安",["Quantum","Cybersecurity","High Risk Growth"],"B",3,"Hold","低流動性"),
+ PU("GLW","Corning 康寧",2,211.275,"外幣交割 G552118","USD","Exit Candidate","光通訊/玻璃",["AI Data Center","Optical","Glass"],"B-",2,"Watch",""),
+ PU("SPCX","SPCX (SpaceX)",5,157.026,"外幣交割 G552118","USD","Satellite","太空",["SpaceX","Private Space","Event Driven"],"B",3,"Hold","")
 ];}
 function P(tk,mkt,name,sh,cost,ccy,acct,type,sec,theme,pri,conf,st,notes){
  return {id:tk+"@"+acct,ticker:tk,market:mkt,name,shares:sh,avgCost:cost,accountCurrency:ccy,marketCurrency:ccy,costCurrency:ccy,quoteCurrency:ccy,broker:acct,currentPrice:null,positionType:type,sector:sec,theme,priority:pri,healthScore:null,confidence:conf,status:st,realizedPL:null,lastUpdated:"2026-07-09",notes};
@@ -141,6 +141,7 @@ function freshData(){return {
  graph:[["HBM","MU"],["HBM","KMEM"],["DRAM","MU"],["AI Server","MU"],["AI Server","2330"],["AI Server","4958"],["CCL","4958"],["PCB","4958"],["CoWoS","2330"],["SOX","00662"],["SOX","00685L"],["台股大盤","0050"],["Quantum","LAES"],["SpaceX","SPCX"],["Foundry","GFS"],["Foundry","2330"],["光通訊","GLW"]],
  majorEvents:[],validation:[],quoteMeta:{lastTW:null,quoteDateTW:null,lastFX:null},
  decisionLog:[
+  {ts:now(),ticker:"SYSTEM",field:"帳戶修正",oldVal:"KMEM/GFS/MU 誤置外幣帳戶",newVal:"台幣交割:LAES50/KMEM/GFS/MU;外幣交割:LAES45/GLW/SPCX",reason:"依 2026/07/09 對帳單修正帳戶歸屬,成本均為 USD 計價"},
   {ts:now(),ticker:"4958",field:"減碼",oldVal:"73股@578.82",newVal:"40股@577.50",reason:"07/09 於595分批賣出33股(交易紀錄#1),狀態改 Buy Back 等回補"},
   {ts:now(),ticker:"LAES",field:"帳戶結構",oldVal:"單帳戶45股",newVal:"台幣50股@2.8022 + 外幣45股@3.0024,合計95股",reason:"多帳戶架構導入(2026/07/09 對帳)"},
   {ts:now(),ticker:"SYSTEM",field:"init",oldVal:"-",newVal:"DIOS v3.1 建立(多帳戶+交易Append)",reason:"系統初始化"}
@@ -470,8 +471,9 @@ function openBackup(){
 function doImport(){
  const raw=document.getElementById("iotext").value.trim();
  if(raw.toUpperCase()==="RESET"){
-  Store.data=freshData();Store.persist();document.querySelector(".modal").remove();render();
-  toast("已重置為 2026/07/09 最新持股種子(4958=40股、LAES 雙帳戶)");return;
+  const keep=Store.data&&Store.data.settings?{fxUSDTWD:Store.data.settings.fxUSDTWD,finmindToken:Store.data.settings.finmindToken,finnhubToken:Store.data.settings.finnhubToken}:{};
+  Store.data=freshData();Object.assign(Store.data.settings,keep);Store.persist();document.querySelector(".modal").remove();render();
+  toast("已重置為 2026/07/09 修正版種子(帳戶歸屬已修正),Token 與匯率保留");return;
  }
  try{
   const o=migrate(JSON.parse(raw));
