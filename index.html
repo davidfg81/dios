@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>DIOS — AI Investment Operating System</title>
+<meta name="theme-color" content="#020617">
+<style>
+:root{--bg:#020617;--panel:#0f172a;--line:#1e293b;--txt:#e2e8f0;--dim:#64748b;--dimmer:#475569;--amber:#fbbf24;--amber-d:#d97706;--up:#f87171;--down:#34d399;--rose:#fb7185;--sky:#38bdf8}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:ui-sans-serif,system-ui,"Noto Sans TC",sans-serif;font-size:14px}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+header{position:sticky;top:0;z-index:20;background:var(--bg);border-bottom:1px solid var(--line)}
+.hrow{display:flex;align-items:center;gap:8px;padding:10px 14px 6px}
+.logo{font-weight:800;color:var(--amber);letter-spacing:4px;font-family:ui-monospace,monospace}
+.ver{color:var(--dimmer);font-size:11px;font-family:ui-monospace,monospace}
+.hbtns{margin-left:auto;display:flex;gap:6px}
+.chip{background:transparent;border:1px solid var(--line);color:var(--txt);border-radius:6px;padding:4px 8px;font-size:11px;font-family:ui-monospace,monospace}
+nav{display:flex;overflow-x:auto;padding:0 8px;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav button{background:none;border:none;border-bottom:2px solid transparent;color:var(--dim);padding:8px 10px;font-size:12px;font-family:ui-monospace,monospace;white-space:nowrap}
+nav button.on{color:var(--amber);border-bottom-color:var(--amber)}
+main{padding:12px;max-width:960px;margin:0 auto;padding-bottom:90px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:10px}
+.card.warn{border-color:#92600e}
+.clabel{font-size:11px;letter-spacing:2px;color:var(--dim);font-family:ui-monospace,monospace;margin-bottom:8px}
+.card.warn .clabel{color:var(--amber)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.grid2 .card{margin-bottom:0}
+.big{font-size:19px;font-family:ui-monospace,monospace}
+.up{color:var(--up)}.down{color:var(--down)}.flat{color:var(--txt)}
+.missing{font-size:11px;padding:1px 6px;border:1px solid #92600e;border-radius:4px;color:#f59e0b;background:#451a03;white-space:nowrap}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{font-size:11px;color:var(--dim);font-family:ui-monospace,monospace;text-align:left;padding:8px 6px;background:var(--panel)}
+td{padding:8px 6px;border-top:1px solid var(--line)}
+.twrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;margin-bottom:12px}
+.tk{font-family:ui-monospace,monospace;color:#f1f5f9}
+.sub{font-size:11px;color:var(--dim)}
+.tag{font-size:10px;padding:1px 6px;border-radius:4px;background:#1e293b}
+.tag.core{color:var(--amber)}.tag.sat{color:var(--sky)}.tag.tac{color:#c4b5fd}.tag.exitc{color:var(--rose)}
+.st{font-size:10px;padding:1px 6px;border-radius:4px;border:1px solid var(--dimmer);color:var(--dim)}
+.st.tp{border-color:#92600e;color:var(--amber)}.st.exit{border-color:#9f1239;color:var(--rose)}
+.btn{background:var(--amber-d);color:var(--bg);border:none;border-radius:6px;padding:8px 14px;font-weight:700;font-size:13px}
+.btn.sec{background:#1e293b;color:var(--txt);border:1px solid var(--line)}
+.btn:disabled{background:#1e293b;color:var(--dimmer)}
+.row{display:flex;align-items:center;gap:8px;padding:4px 2px;width:100%;background:none;border:none;color:var(--txt);text-align:left;font-size:13px}
+.bar{flex:1;height:5px;background:#1e293b;border-radius:3px;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--amber)}
+.fitem{padding:3px 0}
+.flabel{font-size:11px;color:var(--dimmer);font-family:ui-monospace,monospace;margin-bottom:2px}
+.editv{background:none;border:none;color:var(--txt);font-size:13px;text-align:left;padding:0;font-family:inherit}
+input,textarea,select{background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--txt);padding:6px 8px;font-size:13px;font-family:inherit;width:100%}
+input:focus,textarea:focus{outline:none;border-color:var(--amber-d)}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:40;display:flex;align-items:flex-end;justify-content:center;padding:12px}
+.mbox{background:var(--panel);border:1px solid var(--line);border-radius:12px;width:100%;max-width:640px;padding:14px;max-height:85vh;overflow-y:auto}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:#1e293b;border:1px solid var(--amber-d);color:#fde68a;font-size:12px;padding:8px 14px;border-radius:8px;z-index:50;display:none;max-width:88vw}
+.dgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media(min-width:640px){.dgrid{grid-template-columns:repeat(4,1fr)}}
+.logitem{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:8px 10px;font-size:12px;margin-bottom:6px}
+.stage2{color:var(--dimmer);text-align:center;padding:60px 10px;font-size:13px;line-height:2}
+.back{background:none;border:none;color:var(--dim);font-size:12px;font-family:ui-monospace,monospace;padding:0;margin-bottom:8px}
+h2{font-size:18px;margin:4px 0;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<header>
+  <div class="hrow">
+    <span class="logo">DIOS</span><span class="ver">v3.1-S1 · Web</span>
+    <div class="hbtns">
+      <button class="chip" onclick="editFx()">USD/TWD <b id="fxval" style="color:var(--amber)">缺</b></button>
+      <button class="chip" onclick="openBackup()">備份</button>
+    </div>
+  </div>
+  <nav id="nav"></nav>
+</header>
+<main id="main"></main>
+<div id="toast"></div>
+
+<script>
+/* ===== DIOS v3.1 — Store/Repository/Provider 分層,多帳戶持股,交易 Append =====
+   規則:報價只更新市價不碰成本;成本變動只能來自交易紀錄(Append)或手動(會記 Log);
+   每帳戶獨立股數/成本/已實現損益;同 ticker 跨帳戶自動合計+加權均價。 */
+
+const VERSION="3.1-S1", KEY="dios-data";
+const today=()=>new Date().toISOString().slice(0,10);
+const now=()=>new Date().toISOString().slice(0,16).replace("T"," ");
+const PRI={"A+":0,"A":1,"B":2,"B-":3,"C":4};
+const fmt=(n,dp=2)=>(n==null||isNaN(n))?null:Number(n).toLocaleString("en-US",{minimumFractionDigits:dp,maximumFractionDigits:dp});
+const plCls=v=>v==null?"flat":v>0?"up":v<0?"down":"flat";
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+/* ---------- 種子:2026/07/09 最新持股(多帳戶) ---------- */
+function seedPositions(){return [
+ // 台股(國泰證券)
+ P("0050","TW","元大台灣50",422,86.05,"TWD","國泰證券","Core","ETF/大盤",["Taiwan Large Cap ETF"],"A",4,"Hold","定期定額"),
+ P("00662","TW","富邦NASDAQ",200,120,"TWD","國泰證券","Tactical","ETF/美科技",["Nasdaq ETF"],"B",3,"Hold",""),
+ P("00685L","TW","群益臺灣加權正2",1920,12.56,"TWD","國泰證券","Tactical","ETF/槓桿",["Taiwan 2x Leveraged"],"B",3,"Hold","槓桿耗損風險"),
+ P("00407A","TW","主動凱基台灣",2000,9.63,"TWD","國泰證券","Exit Candidate","ETF/防禦",["Defensive","ETF"],"C",2,"Exit","第一出場候選"),
+ P("2330","TW","台積電",10,1978.4,"TWD","國泰證券","Core","半導體/晶圓代工",["AI","Semiconductor","Foundry","CoWoS"],"A+",5,"Hold","定期定額"),
+ P("4958","TW","臻鼎-KY",40,577.50,"TWD","國泰證券","Core","PCB/CCL",["PCB","CCL","AI Server","Supply Chain"],"A",4,"Buy Back","07/09 於595賣出33股,保留40股,回檔考慮補回"),
+ // 美股 — 台幣交割 L607568
+ PU("LAES","SEALSQ",50,2.8022,"台幣複委託 L607568","TWD","Satellite","量子/資安",["Quantum","Cybersecurity","High Risk Growth"],"B",3,"Hold","低流動性"),
+ // 美股 — 外幣交割 G552118
+ PU("LAES","SEALSQ",45,3.002444,"外幣帳戶 G552118","USD","Satellite","量子/資安",["Quantum","Cybersecurity","High Risk Growth"],"B",3,"Hold","低流動性"),
+ PU("MU","Micron 美光",3,966.4033,"外幣帳戶 G552118","USD","Core","半導體/記憶體",["AI","HBM","DRAM","Memory"],"A+",4,"Hold","成本以USD計(區間對應手冊),交割幣別依券商"),
+ PU("GFS","GlobalFoundries",5,66.584,"外幣帳戶 G552118","USD","Core","半導體/晶圓代工",["Semiconductor","Foundry","AI Infrastructure"],"A",3,"Hold",""),
+ PU("KMEM","KMEM 記憶體ETF",20,22.85,"外幣帳戶 G552118","USD","Tactical","ETF/記憶體",["Memory ETF","DRAM","NAND","HBM"],"B",3,"Take Profit","與 MU 重疊,MU 優先"),
+ PU("GLW","Corning 康寧",2,211.275,"外幣帳戶 G552118","USD","Exit Candidate","光通訊/玻璃",["AI Data Center","Optical","Glass"],"B-",2,"Watch","成本以USD計"),
+ PU("SPCX","SPCX (SpaceX)",5,157.026,"外幣帳戶 G552118","USD","Satellite","太空",["SpaceX","Private Space","Event Driven"],"B",3,"Hold","")
+];}
+function P(tk,mkt,name,sh,cost,ccy,acct,type,sec,theme,pri,conf,st,notes){
+ return {id:tk+"@"+acct,ticker:tk,market:mkt,name,shares:sh,avgCost:cost,accountCurrency:ccy,marketCurrency:ccy,costCurrency:ccy,quoteCurrency:ccy,broker:acct,currentPrice:null,positionType:type,sector:sec,theme,priority:pri,healthScore:null,confidence:conf,status:st,realizedPL:null,lastUpdated:"2026-07-09",notes};
+}
+function PU(tk,name,sh,cost,acct,acctCcy,type,sec,theme,pri,conf,st,notes){
+ return {id:tk+"@"+acct,ticker:tk,market:"US",name,shares:sh,avgCost:cost,accountCurrency:acctCcy,marketCurrency:"USD",costCurrency:"USD",quoteCurrency:"USD",broker:acct,currentPrice:null,positionType:type,sector:sec,theme,priority:pri,healthScore:null,confidence:conf,status:st,realizedPL:null,lastUpdated:"2026-07-09",notes};
+}
+function seedManual(){return {
+ MU:{buildZone:"900–960",addZone:"850–900",tp1:"1120–1150 → 賣 1 股",tp2:"1250–1300 → 賣 1 股",tp3:"1400+ → 評估最後 1 股",buyBack:"1000 / 950 / 900",invalid:"HBM 需求下修、AI 伺服器需求放緩、連兩季財報 miss",keySupport:null,keyResistance:null,catalysts:"HBM、DRAM 報價、AI 伺服器需求、美光財報",riskFactors:"記憶體循環反轉、估值過高",todayAdvice:null,orderSuggestion:null,lastChange:"2026-07-09 初始化"},
+ GFS:{buildZone:"64–68",addZone:"60–63",tp1:"75 → 賣 1 股",tp2:"82 → 賣 1 股",tp3:"90 → 賣 1 股,保留 2 股",buyBack:"66 / 62",invalid:"毛利惡化、財測下修、成熟製程需求放緩",keySupport:null,keyResistance:null,catalysts:"財報、AI 基礎建設、車用、RF、PMIC",riskFactors:"成熟製程競爭",todayAdvice:null,orderSuggestion:null,lastChange:"2026-07-09 初始化"},
+ KMEM:{buildZone:"不新建倉",addZone:"不加碼",tp1:"22.5–23 → 賣 10 股",tp2:"24–25 → 賣 10 股",tp3:"無",buyBack:"20 / 18.5(MU 優先)",invalid:"持續跑輸 MU 與 SOXX",keySupport:null,keyResistance:null,catalysts:"記憶體循環、ETF 資金流、DRAM/NAND 報價",riskFactors:"與 MU 重疊",todayAdvice:null,orderSuggestion:null,lastChange:"2026-07-09 初始化"},
+ GLW:{buildZone:"180–190",addZone:"170–180",tp1:"195–200 → 賣 1 股",tp2:"210–220 → 賣 1 股",tp3:"無",buyBack:"180 / 170",invalid:"AI 光通訊題材轉弱",keySupport:null,keyResistance:null,catalysts:"光通訊、資料中心、康寧財報",riskFactors:"題材鈍化",todayAdvice:null,orderSuggestion:null,lastChange:"2026-07-09 初始化"},
+ LAES:{buildZone:"2.8–3.1",addZone:"2.4–2.6",tp1:"3.5 → 賣 15 股",tp2:"4.0 → 賣 15 股",tp3:"5.0+ → 賣 15 股",buyBack:"3.0 / 2.6",invalid:"量子/資安題材轉弱、低流動性破位",keySupport:null,keyResistance:null,catalysts:"量子加密、資安新聞、量能",riskFactors:"高波動、低流動性(合計95股,建議股數制依帳戶拆分)",todayAdvice:null,orderSuggestion:null,lastChange:"2026-07-09 初始化"},
+ SPCX:{buildZone:"145–155",addZone:"135–145",tp1:"170 → 賣 1 股",tp2:"190 → 賣 2 股",tp3:"220 → 賣 2 股",buyBack:"150 / 140",invalid:"SpaceX 催化消退、流動性轉弱",keySupport:null,keyResistance:null,catalysts:"SpaceX 估值、解禁、私人太空",riskFactors:"溢價、事件波動",todayAdvice:null,orderSuggestion:null,lastChange:"2026-07-09 初始化"},
+ "00407A":{buildZone:"不新建倉",addZone:"不加碼",tp1:"需要現金時可隨時賣出",tp2:"無",tp3:"無",buyBack:"不回補",invalid:"資金效率過低",keySupport:null,keyResistance:null,catalysts:"無",riskFactors:"機會成本",todayAdvice:null,orderSuggestion:null,lastChange:"2026-07-09 初始化(第一出場候選)"},
+ "0050":{buildZone:"95–105",addZone:"90 以下",tp1:"115–118 → 賣 100 股",tp2:"125–130 → 賣 100 股",tp3:"其餘核心續抱",buyBack:"105 / 98 / 90",invalid:"台股趨勢轉空",keySupport:null,keyResistance:null,catalysts:"加權指數、台積電、外資",riskFactors:"系統性風險",todayAdvice:null,orderSuggestion:null,lastChange:"2026-07-09 初始化"},
+ "00662":{buildZone:"115–120",addZone:"108–112",tp1:"125–128 → 賣 100 股",tp2:"132–136 → 賣 100 股",tp3:"無",buyBack:"118 / 112",invalid:"與 0050/台積電重疊致效率不佳",keySupport:null,keyResistance:null,catalysts:"半導體 ETF 資金流、SOX、台積電",riskFactors:"重疊曝險",todayAdvice:null,orderSuggestion:null,lastChange:"2026-07-09 初始化"},
+ "00685L":{buildZone:"12–12.6",addZone:"11.3–11.8",tp1:"13.3–13.6 → 賣 640 股",tp2:"14–14.5 → 賣 640 股",tp3:"15+ → 賣 640 股",buyBack:"12 / 11.3",invalid:"台股轉空、槓桿耗損擴大",keySupport:null,keyResistance:null,catalysts:"台股半導體動能、台積電、SOX",riskFactors:"槓桿衰減",todayAdvice:null,orderSuggestion:null,lastChange:"2026-07-09 初始化"},
+ "2330":{buildZone:"1900–2100",addZone:"1800–1900",tp1:"2600–2650 → 賣 2 股",tp2:"2800–2900 → 賣 3 股",tp3:"保留 5 股核心",buyBack:"2400 / 2200 / 2050",invalid:"AI 資本支出下修、先進製程需求放緩",keySupport:null,keyResistance:null,catalysts:"月營收、法說、CoWoS、NVIDIA/AMD",riskFactors:"地緣政治、匯率",todayAdvice:null,orderSuggestion:null,lastChange:"2026-07-09 初始化"},
+ "4958":{buildZone:"550–580",addZone:"520 / 500",tp1:"620–650 → 賣 20 股",tp2:"680–720 → 賣 10 股",tp3:"760+ → 評估保留股",buyBack:"575 / 560 / 520",invalid:"CCL/PCB 循環未啟動或獲利惡化",keySupport:null,keyResistance:null,catalysts:"CCL 報價、PCB 需求、AI 伺服器供應鏈、法人",riskFactors:"已減碼33股,回補紀律:預先定回補價與放棄價",todayAdvice:null,orderSuggestion:null,lastChange:"2026-07-09 依實際減碼調整(40股基準)"}
+};}
+function freshData(){return {
+ version:VERSION,
+ settings:{fxUSDTWD:null,cashTWD:null,cashUSD:null,finmindToken:null,
+  targetAlloc:{"半導體/記憶體":25,"ETF":35,"PCB/CCL":15,"量子/太空/其他":10,"現金":15}},
+ positions:seedPositions(),manual:seedManual(),
+ transactions:[ // Append-only 交易紀錄
+  {ts:"2026-07-09",id:"4958@國泰證券",ticker:"4958",side:"Sell",shares:33,price:595,note:"分批停利,保留40股;依賣出前均價578.82估已實現約+534 TWD",realized:533.94}
+ ],
+ watchlist:["NVDA","2454","2308","2882","AVGO","IONQ","SMH","6116"].map(t=>({ticker:t,name:"",market:/^[0-9]/.test(t)?"TW":"US",priority:null,score:null,confidence:null,expectedTime:null,catalyst:null,risk:null,expectedReturn:null})),
+ aiReports:{},consensus:{},consensusHistory:[],todayBoard:null,scenarios:{},metrics:{},
+ graph:[["HBM","MU"],["HBM","KMEM"],["DRAM","MU"],["AI Server","MU"],["AI Server","2330"],["AI Server","4958"],["CCL","4958"],["PCB","4958"],["CoWoS","2330"],["SOX","00662"],["SOX","00685L"],["台股大盤","0050"],["Quantum","LAES"],["SpaceX","SPCX"],["Foundry","GFS"],["Foundry","2330"],["光通訊","GLW"]],
+ majorEvents:[],validation:[],quoteMeta:{lastTW:null,quoteDateTW:null,lastFX:null},
+ decisionLog:[
+  {ts:now(),ticker:"4958",field:"減碼",oldVal:"73股@578.82",newVal:"40股@577.50",reason:"07/09 於595分批賣出33股(交易紀錄#1),狀態改 Buy Back 等回補"},
+  {ts:now(),ticker:"LAES",field:"帳戶結構",oldVal:"單帳戶45股",newVal:"台幣50股@2.8022 + 外幣45股@3.0024,合計95股",reason:"多帳戶架構導入(2026/07/09 對帳)"},
+  {ts:now(),ticker:"SYSTEM",field:"init",oldVal:"-",newVal:"DIOS v3.1 建立(多帳戶+交易Append)",reason:"系統初始化"}
+ ]
+};}
+function migrate(d){
+ const f=freshData(); const out=Object.assign({},f,d);
+ out.version=VERSION;
+ out.settings=Object.assign({},f.settings,d.settings||{});
+ (out.positions||[]).forEach(p=>{
+  if(!p.id)p.id=p.ticker+"@"+(p.broker||"預設帳戶");
+  if(p.realizedPL===undefined)p.realizedPL=null;
+ });
+ Object.keys(out.manual||{}).forEach(k=>{const m=out.manual[k];if(m&&m.todayAction!==undefined){m.todayAdvice=m.todayAdvice??m.todayAction;delete m.todayAction;}});
+ ["watchlist","aiReports","consensus","consensusHistory","scenarios","metrics","graph","majorEvents","validation","decisionLog","transactions"].forEach(k=>{if(out[k]==null)out[k]=f[k]||[];});
+ if(!out.quoteMeta)out.quoteMeta={lastTW:null,quoteDateTW:null,lastFX:null};
+ return out;
+}
+
+/* ---------- Store ---------- */
+const Store={
+ data:null,
+ load(){try{const r=localStorage.getItem(KEY);this.data=r?migrate(JSON.parse(r)):freshData();}catch(e){this.data=freshData();}this.persist();},
+ persist(){try{localStorage.setItem(KEY,JSON.stringify(this.data));}catch(e){toast("儲存失敗:"+e.message);}},
+ log(ticker,field,oldVal,newVal,reason){this.data.decisionLog.unshift({ts:now(),ticker,field,oldVal:oldVal==null?"Data Missing":String(oldVal),newVal:newVal==null?"Data Missing":String(newVal),reason:reason||"手動更新"});}
+};
+const findPos=id=>Store.data.positions.find(x=>x.id===id);
+
+/* ---------- Repository ---------- */
+const Repo={
+ setPosition(id,field,value,reason){
+  const p=findPos(id);if(!p)return;
+  if(String(p[field])===String(value))return;
+  Store.log(p.ticker,field+"("+p.broker+")",p[field],value,reason);
+  p[field]=value;p.lastUpdated=today();Store.persist();render();toast(p.ticker+" 已更新並記錄");
+ },
+ setManual(ticker,field,value,reason){
+  const m=Store.data.manual[ticker];if(!m)return;
+  if(String(m[field])===String(value))return;
+  Store.log(ticker,"手冊/"+field,m[field],value,reason||"手冊調整");
+  m[field]=value;m.lastChange=today()+" "+(reason||"手動調整");Store.persist();render();toast(ticker+" 手冊已更新");
+ },
+ setSetting(k,v,label){Store.log("SYSTEM",label||k,Store.data.settings[k],v,"設定更新");Store.data.settings[k]=v;Store.persist();render();},
+ addTransaction(id,side,shares,price,note){ // Append-only:成本由交易推算,不直接改
+  const p=findPos(id);if(!p)return toast("找不到部位");
+  shares=Math.abs(shares);
+  const tx={ts:today(),id,ticker:p.ticker,side,shares,price,note:note||"",realized:null};
+  if(side==="Buy"){
+   const newAvg=(p.avgCost*p.shares+price*shares)/(p.shares+shares);
+   Store.log(p.ticker,"買進("+p.broker+")",p.shares+"股@"+fmt(p.avgCost,4),(p.shares+shares)+"股@"+fmt(newAvg,4),"交易紀錄:買 "+shares+" 股 @ "+price);
+   p.shares+=shares;p.avgCost=newAvg;
+  }else{
+   if(shares>p.shares)return toast("賣出股數超過持有("+p.shares+")");
+   const realized=(price-p.avgCost)*shares;tx.realized=Math.round(realized*100)/100;
+   p.realizedPL=(p.realizedPL||0)+tx.realized;
+   Store.log(p.ticker,"賣出("+p.broker+")",p.shares+"股",(p.shares-shares)+"股,已實現 "+(tx.realized>0?"+":"")+fmt(tx.realized,2)+" "+p.quoteCurrency,"交易紀錄:賣 "+shares+" 股 @ "+price);
+   p.shares-=shares; // 均價不變
+  }
+  p.lastUpdated=today();Store.data.transactions.unshift(tx);Store.persist();render();toast("交易已記錄(Append),成本自動推算");
+ },
+ applyQuotes(quotes,fxRate,srcName){ // 只更新市價,絕不碰成本
+  let n=0,qd=null;
+  quotes.forEach(q=>{
+   Store.data.positions.filter(x=>x.ticker===q.ticker).forEach(p=>{
+    if(q.price!=null&&q.price!==p.currentPrice){Store.log(q.ticker,"現價",p.currentPrice,q.price,srcName+" 報價("+q.date+")");p.currentPrice=q.price;p.lastUpdated=q.date;n++;}
+   });
+   if(q.date)qd=q.date;
+  });
+  if(fxRate!=null&&fxRate!==Store.data.settings.fxUSDTWD){Store.log("SYSTEM","USD/TWD",Store.data.settings.fxUSDTWD,fxRate,srcName+" 匯率");Store.data.settings.fxUSDTWD=fxRate;}
+  Store.data.quoteMeta.lastTW=now();Store.data.quoteMeta.quoteDateTW=qd;
+  if(fxRate!=null)Store.data.quoteMeta.lastFX=now();
+  Store.persist();render();return n;
+ }
+};
+
+/* ---------- Providers ---------- */
+const FinMind={
+ base:"https://api.finmindtrade.com/api/v4/data",
+ async get(params){
+  const token=Store.data.settings.finmindToken;
+  const u=new URLSearchParams(params);
+  const opt=token?{headers:{Authorization:"Bearer "+token}}:{};
+  const r=await fetch(this.base+"?"+u.toString(),opt);
+  if(!r.ok)throw new Error("HTTP "+r.status);
+  return (await r.json()).data||[];
+ },
+ async twClose(id){
+  const start=new Date(Date.now()-14*864e5).toISOString().slice(0,10);
+  const rows=await this.get({dataset:"TaiwanStockPrice",data_id:id,start_date:start});
+  if(!rows.length)return null;
+  const last=rows[rows.length-1];
+  return {ticker:id,price:last.close,date:last.date};
+ },
+ async fxUSD(){
+  const start=new Date(Date.now()-14*864e5).toISOString().slice(0,10);
+  const rows=await this.get({dataset:"TaiwanExchangeRate",data_id:"USD",start_date:start});
+  if(!rows.length)return null;
+  const last=rows[rows.length-1];
+  const buy=parseFloat(last.spot_buy),sell=parseFloat(last.spot_sell);
+  const mid=(buy>0&&sell>0)?(buy+sell)/2:(sell>0?sell:buy);
+  return mid>0?Math.round(mid*1000)/1000:null;
+ }
+};
+const USProvider={ready:false}; // Stage 2:Finnhub 直連 → 或 Cloudflare Worker
+
+async function updateQuotes(){
+ const btn=document.getElementById("updbtn");if(btn){btn.disabled=true;btn.textContent="更新中…";}
+ const tw=[...new Set(Store.data.positions.filter(p=>p.market==="TW").map(p=>p.ticker))];
+ const results=[],fails=[];
+ try{
+  const settled=await Promise.allSettled(tw.map(id=>FinMind.twClose(id)));
+  settled.forEach((s,i)=>{if(s.status==="fulfilled"&&s.value)results.push(s.value);else fails.push(tw[i]);});
+  let fx=null;try{fx=await FinMind.fxUSD();}catch(e){fails.push("匯率");}
+  Repo.applyQuotes(results,fx,"FinMind");
+  const qd=Store.data.quoteMeta.quoteDateTW;
+  Store.log("SYSTEM","報價更新","-","台股 "+results.length+"/"+tw.length+" 檔(收盤日 "+qd+")"+(fx!=null?",匯率 "+fx:"")+(fails.length?",失敗:"+fails.join("、"):""),"一鍵更新(FinMind 日收盤)");
+  Store.persist();
+  toast("完成:台股 "+results.length+" 檔(收盤日 "+qd+")"+(fx!=null?" + 匯率":"")+"。註:日收盤資料,當日收盤價於收盤後更新;美股 Stage 2。");
+ }catch(e){toast("更新失敗:"+e.message);}
+ finally{if(btn){btn.disabled=false;btn.textContent="⟳ 更新報價";}render();}
+}
+
+/* ---------- 計算 ---------- */
+function calc(p){
+ const fx=Store.data.settings.fxUSDTWD,price=p.currentPrice;
+ const mv=price!=null?price*p.shares:null;
+ const pl=(price!=null&&p.costCurrency===p.quoteCurrency)?(price-p.avgCost)*p.shares:null;
+ const plPct=pl!=null?((price-p.avgCost)/p.avgCost)*100:null;
+ const toTWD=v=>v==null?null:(p.quoteCurrency==="TWD"?v:(fx!=null?v*fx:null));
+ return {mv,pl,plPct,mvTWD:toTWD(mv),plTWD:toTWD(pl)};
+}
+function aggregates(){ // 同 ticker 跨帳戶合計
+ const g={};
+ Store.data.positions.forEach(p=>{
+  g[p.ticker]=g[p.ticker]||{ticker:p.ticker,shares:0,cost:0,accts:0};
+  g[p.ticker].shares+=p.shares;g[p.ticker].cost+=p.avgCost*p.shares;g[p.ticker].accts++;
+ });
+ return Object.values(g).filter(x=>x.accts>1).map(x=>({...x,wavg:x.shares>0?x.cost/x.shares:null}));
+}
+
+/* ---------- UI ---------- */
+let tab="dashboard",sel=null;
+const TABS=[["dashboard","Dashboard"],["portfolio","Portfolio"],["manual","Manual"],["log","Log"],["import","Import·S2"],["consensus","Consensus·S2"],["watchlist","Watchlist·S2"],["risk","Risk·S2"],["graph","Graph·S2"],["formats","Formats·S2"]];
+function toast(m){const t=document.getElementById("toast");t.textContent=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",4200);}
+function missing(t){return '<span class="missing">'+(t||"Data Missing")+'</span>';}
+function typeCls(t){return t==="Core"?"core":t==="Satellite"?"sat":t==="Tactical"?"tac":"exitc";}
+function stCls(s){return s==="Take Profit"?"tp":s==="Exit"?"exit":"";}
+
+function render(){
+ document.getElementById("nav").innerHTML=TABS.map(([k,l])=>'<button class="'+(tab===k?"on":"")+'" onclick="go(\''+k+'\')">'+l+'</button>').join("");
+ const fx=Store.data.settings.fxUSDTWD;
+ document.getElementById("fxval").textContent=fx!=null?fx:"缺";
+ const m=document.getElementById("main");
+ if(sel){m.innerHTML=viewDetail(sel);return;}
+ if(tab==="dashboard")m.innerHTML=viewDashboard();
+ else if(tab==="portfolio")m.innerHTML=viewPortfolio();
+ else if(tab==="manual")m.innerHTML=viewManual();
+ else if(tab==="log")m.innerHTML=viewLog();
+ else m.innerHTML='<div class="stage2">此模組於 Stage 2 移植<br>(Import / Consensus / Watchlist / Risk / Graph / Formats)</div>';
+}
+function go(t){tab=t;sel=null;render();window.scrollTo(0,0);}
+function open_(id){sel=id;render();window.scrollTo(0,0);}
+
+function viewDashboard(){
+ const d=Store.data,ps=[...d.positions].sort((a,b)=>(PRI[a.priority]??9)-(PRI[b.priority]??9));
+ let total=0,pl=0,realized=0;const miss=ps.filter(p=>p.currentPrice==null);
+ ps.forEach(p=>{const c=calc(p);if(c.mvTWD!=null)total+=c.mvTWD;if(c.plTWD!=null)pl+=c.plTWD;
+  if(p.realizedPL!=null){realized+=(p.quoteCurrency==="TWD"?p.realizedPL:(d.settings.fxUSDTWD!=null?p.realizedPL*d.settings.fxUSDTWD:0));}});
+ const cash=(d.settings.cashTWD||0)+((d.settings.cashUSD!=null&&d.settings.fxUSDTWD!=null)?d.settings.cashUSD*d.settings.fxUSDTWD:0);
+ const rank=[...ps].sort((a,b)=>(b.healthScore??-1)-(a.healthScore??-1));
+ const exitC=ps.filter(p=>p.positionType==="Exit Candidate"||p.status==="Exit");
+ const aggs=aggregates(),tb=d.todayBoard;
+ return `
+ <div class="card warn"><div class="clabel">▍QUOTE ENGINE 報價引擎</div>
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+   <button class="btn" id="updbtn" onclick="updateQuotes()">⟳ 更新報價</button>
+   <span class="sub">FinMind 日收盤 · 台股 ${[...new Set(ps.filter(p=>p.market==="TW").map(p=>p.ticker))].length} 檔 + 匯率<br>報價日:<b style="color:var(--amber)">${d.quoteMeta.quoteDateTW??"—"}</b> · 上次執行:${d.quoteMeta.lastTW??"從未"}<br>當日收盤價於收盤後供應 · 美股 Stage 2</span>
+  </div></div>
+ <div class="card warn"><div class="clabel">▍TODAY'S ACTION 今日作戰指令</div>
+  ${tb&&tb.action?tb.action.map((x,i)=>'<div style="padding:2px 0">'+["①","②","③","④","⑤","⑥","⑦","⑧"][i]+' <b class="tk" style="color:var(--amber)">'+esc(x.t)+'</b> '+esc(x.txt)+'</div>').join(""):'<span class="sub">由 Report Import(Stage 2)自動生成。</span>'}
+ </div>
+ <div class="grid2">
+  <div class="card"><div class="clabel">▍總資產 (TWD 含現金)</div><div class="big">${fmt(total+cash,0)??"—"}</div>${(miss.length||d.settings.fxUSDTWD==null)?'<div class="sub" style="color:#f59e0b;margin-top:4px">部分計算:'+miss.length+' 檔缺報價'+(d.settings.fxUSDTWD==null?"、缺匯率":"")+'</div>':""}</div>
+  <div class="card"><div class="clabel">▍未實現損益 (TWD)</div><div class="big ${plCls(pl)}">${pl>0?"+":""}${fmt(pl,0)??"—"}</div><div class="sub" style="margin-top:4px">已實現(估):<span class="${plCls(realized)}">${realized?((realized>0?"+":"")+fmt(realized,0)):"—"}</span></div></div>
+ </div>
+ <div style="height:10px"></div>
+ ${aggs.length?'<div class="card"><div class="clabel">▍跨帳戶合計</div>'+aggs.map(a=>'<div style="padding:2px 0"><span class="tk">'+a.ticker+'</span> <span class="sub">合計 </span><span class="mono">'+a.shares+'</span><span class="sub"> 股 · 加權均價 </span><span class="mono">'+fmt(a.wavg,4)+'</span><span class="sub">('+a.accts+' 個帳戶)</span></div>').join("")+'</div>':""}
+ <div class="card"><div class="clabel">▍持股健康度排名</div>
+  ${rank.map((p,i)=>'<button class="row" onclick="open_(\''+p.id+'\')"><span class="sub mono" style="width:18px">'+(i+1)+'</span><span class="tk" style="width:64px">'+p.ticker+'</span><span class="sub" style="flex:1">'+esc(p.priority)+' · '+esc(p.broker.replace("外幣帳戶 ","外幣").replace("台幣複委託 ","台幣"))+'</span>'+(p.healthScore!=null?'<span class="bar" style="max-width:90px"><i style="width:'+p.healthScore+'%"></i></span><span class="mono" style="width:28px;text-align:right">'+p.healthScore+'</span>':missing())+'</button>').join("")}
+ </div>
+ <div class="card"><div class="clabel">▍最該減碼 / 出場候選</div>
+  ${exitC.length?exitC.map(p=>'<button class="row" onclick="open_(\''+p.id+'\')"><span class="tk" style="color:var(--rose)">'+p.ticker+'</span><span class="sub">'+esc(p.status)+' · '+esc(p.notes||"")+'</span></button>').join(""):'<span class="sub">無</span>'}
+ </div>`;
+}
+
+function viewPortfolio(){
+ const d=Store.data,ps=[...d.positions].sort((a,b)=>(PRI[a.priority]??9)-(PRI[b.priority]??9));
+ const aggs=aggregates();
+ const block=mkt=>{
+  const rows=ps.filter(p=>p.market===mkt);if(!rows.length)return"";
+  return '<div class="clabel">▍'+(mkt==="TW"?"台股 TW":"美股 US")+'</div><div class="twrap"><table><thead><tr><th>代碼/帳戶</th><th>股數</th><th>均價</th><th>現價</th><th>損益%</th><th>已實現</th><th>狀態</th></tr></thead><tbody>'+
+  rows.map(p=>{const c=calc(p);return '<tr onclick="open_(\''+p.id+'\')"><td><div class="tk">'+p.ticker+' <span class="mono" style="color:var(--amber);font-size:11px">'+p.priority+'</span></div><div class="sub">'+esc(p.broker)+'</div></td><td class="mono">'+p.shares.toLocaleString()+'</td><td class="mono">'+fmt(p.avgCost)+'</td><td class="mono">'+(p.currentPrice!=null?fmt(p.currentPrice):missing())+'</td><td class="mono '+plCls(c.plPct)+'">'+(c.plPct!=null?(c.plPct>0?"+":"")+fmt(c.plPct)+"%":"—")+'</td><td class="mono '+plCls(p.realizedPL)+'">'+(p.realizedPL!=null?(p.realizedPL>0?"+":"")+fmt(p.realizedPL,0):"—")+'</td><td><span class="st '+stCls(p.status)+'">'+p.status+'</span></td></tr>';}).join("")+'</tbody></table></div>';
+ };
+ return block("TW")+block("US")+
+ (aggs.length?'<div class="card"><div class="clabel">▍跨帳戶合計</div>'+aggs.map(a=>'<div style="padding:2px 0"><span class="tk">'+a.ticker+'</span> 合計 <span class="mono">'+a.shares+'</span> 股 · 加權均價 <span class="mono">'+fmt(a.wavg,4)+'</span></div>').join("")+'</div>':"")+
+ '<div class="sub">點列進詳細頁。交易(買/賣)請用詳細頁「＋記錄交易」,成本自動推算、Append 保留歷史。</div>';
+}
+
+function viewManual(){
+ const d=Store.data,seen=new Set();
+ const ps=[...d.positions].sort((a,b)=>(PRI[a.priority]??9)-(PRI[b.priority]??9)).filter(p=>{if(seen.has(p.ticker))return false;seen.add(p.ticker);return true;});
+ return ps.map(p=>{const m=d.manual[p.ticker];if(!m)return"";return '<button class="card" style="width:100%;text-align:left;color:var(--txt);font:inherit" onclick="open_(\''+p.id+'\')"><div style="display:flex;gap:8px;align-items:baseline"><span class="tk">'+p.ticker+'</span><span class="sub">'+esc(p.name)+'</span>'+(m.todayAdvice?'<span class="sub" style="color:var(--amber);margin-left:auto">今日:'+esc(m.todayAdvice)+'</span>':"")+'</div><div class="sub" style="margin-top:6px;line-height:1.8">建倉 '+esc(m.buildZone)+' · 加碼 '+esc(m.addZone)+'<br>停利1 '+esc(m.tp1)+'<br>回補 '+esc(m.buyBack)+'</div><div class="sub" style="margin-top:4px;color:var(--dimmer)">失效:'+esc(m.invalid)+'</div></button>';}).join("");
+}
+
+function viewLog(){
+ const log=Store.data.decisionLog;
+ return '<div class="sub" style="margin-bottom:8px">所有變更自動記錄,共 '+log.length+' 筆(顯示前 150)。</div>'+
+ log.slice(0,150).map(e=>'<div class="logitem"><span class="mono sub">'+e.ts+'</span> <span class="mono" style="color:var(--amber)">'+esc(e.ticker)+'</span> <span class="sub">'+esc(e.field)+'</span><div style="margin-top:2px"><span class="sub" style="text-decoration:line-through">'+esc(e.oldVal)+'</span> → '+esc(e.newVal)+'</div><div class="sub">原因:'+esc(e.reason)+'</div></div>').join("");
+}
+
+function viewDetail(id){
+ const d=Store.data,p=findPos(id);if(!p)return"";
+ const m=d.manual[p.ticker]||{};const c=calc(p);
+ const sibs=d.positions.filter(x=>x.ticker===p.ticker&&x.id!==id);
+ const txs=d.transactions.filter(t=>t.id===id).slice(0,10);
+ const F=(label,html)=>'<div class="fitem"><div class="flabel">'+label+'</div>'+html+'</div>';
+ const eNum=(field,val,dp,man)=>'<button class="editv mono" onclick="promptEdit(\''+id+'\',\''+field+'\','+(man?1:0)+',1)">'+(val!=null?fmt(val,dp):missing())+'</button>';
+ const eTxt=(field,val,man)=>'<button class="editv" onclick="promptEdit(\''+id+'\',\''+field+'\','+(man?1:0)+',0)">'+(val!=null?esc(val):missing())+'</button>';
+ return `<button class="back" onclick="sel=null;render()">← 返回</button>
+ <h2><span class="tk">${p.ticker}</span><span class="sub" style="font-size:14px">${esc(p.name)}</span><span class="tag ${typeCls(p.positionType)}">${p.positionType}</span><span class="mono" style="color:var(--amber);font-size:14px">${p.priority}</span><span class="st ${stCls(p.status)}">${p.status}</span></h2>
+ <div class="sub mono" style="margin-bottom:6px">${esc(p.broker)} · 帳戶 ${p.accountCurrency} · 報價 ${p.quoteCurrency} · 成本 ${p.costCurrency} · 更新 ${p.lastUpdated}</div>
+ ${sibs.length?'<div class="sub" style="margin-bottom:8px">同標的其他帳戶:'+sibs.map(s=>'<button class="editv" style="color:var(--sky)" onclick="open_(\''+s.id+'\')">'+esc(s.broker)+' '+s.shares+'股@'+fmt(s.avgCost,4)+'</button>').join(" · ")+'</div>':""}
+ <div class="dgrid">
+  <div class="card"><div class="clabel">現價 (${p.quoteCurrency})</div>${eNum("currentPrice",p.currentPrice,2)}</div>
+  <div class="card"><div class="clabel">市值</div><span class="mono">${c.mv!=null?fmt(c.mv,0):"—"}</span></div>
+  <div class="card"><div class="clabel">未實現損益</div><span class="mono ${plCls(c.pl)}">${c.pl!=null?(c.pl>0?"+":"")+fmt(c.pl,0):"—"}</span></div>
+  <div class="card"><div class="clabel">已實現損益</div><span class="mono ${plCls(p.realizedPL)}">${p.realizedPL!=null?(p.realizedPL>0?"+":"")+fmt(p.realizedPL,2):"—"}</span></div>
+ </div>
+ <div style="height:10px"></div>
+ <div class="card"><div class="clabel">▍交易(Append,成本自動推算)</div>
+  <button class="btn sec" onclick="promptTx('${id}')">＋記錄交易</button>
+  ${txs.length?'<div style="margin-top:8px">'+txs.map(t=>'<div class="sub" style="padding:2px 0"><span class="mono">'+t.ts+'</span> <span style="color:'+(t.side==="Buy"?"var(--up)":"var(--down)")+'">'+t.side+'</span> '+t.shares+' 股 @ '+t.price+(t.realized!=null?' · 已實現 <span class="'+plCls(t.realized)+'">'+(t.realized>0?"+":"")+fmt(t.realized,2)+'</span>':"")+(t.note?' · '+esc(t.note):"")+'</div>').join("")+'</div>':'<div class="sub" style="margin-top:6px">此帳戶尚無交易紀錄。</div>'}
+ </div>
+ <div class="card"><div class="clabel">▍持股資料(點值編輯)</div>
+  ${F("股數(建議用交易記錄變動)",eNum("shares",p.shares,0))}${F("平均成本(建議由交易推算)",eNum("avgCost",p.avgCost,4))}${F("健康分數 0–100",eNum("healthScore",p.healthScore,0))}
+  ${F("狀態",'<select onchange="Repo.setPosition(\''+id+'\',\'status\',this.value)">'+["Build","Hold","Take Profit","Buy Back","Watch","Exit"].map(s=>'<option '+(p.status===s?"selected":"")+'>'+s+'</option>').join("")+'</select>')}
+  ${F("部位類型",'<select onchange="Repo.setPosition(\''+id+'\',\'positionType\',this.value)">'+["Core","Satellite","Tactical","Exit Candidate"].map(s=>'<option '+(p.positionType===s?"selected":"")+'>'+s+'</option>').join("")+'</select>')}
+  ${F("優先級",'<select onchange="Repo.setPosition(\''+id+'\',\'priority\',this.value)">'+["A+","A","B","B-","C"].map(s=>'<option '+(p.priority===s?"selected":"")+'>'+s+'</option>').join("")+'</select>')}
+  ${F("備註",eTxt("notes",p.notes))}
+ </div>
+ <div class="card"><div class="clabel">▍TRADING MANUAL(${p.ticker} 全帳戶共用,股數制)</div>
+  ${F("建倉區",eTxt("buildZone",m.buildZone,1))}${F("加碼區",eTxt("addZone",m.addZone,1))}
+  ${F("停利 1",eTxt("tp1",m.tp1,1))}${F("停利 2",eTxt("tp2",m.tp2,1))}${F("停利 3",eTxt("tp3",m.tp3,1))}
+  ${F("回補區",eTxt("buyBack",m.buyBack,1))}${F("重要支撐",eTxt("keySupport",m.keySupport,1))}${F("重要壓力",eTxt("keyResistance",m.keyResistance,1))}
+  ${F("失效條件",eTxt("invalid",m.invalid,1))}${F("催化事件",eTxt("catalysts",m.catalysts,1))}${F("主要風險",eTxt("riskFactors",m.riskFactors,1))}
+  ${F("今日建議",eTxt("todayAdvice",m.todayAdvice,1))}${F("委託建議",eTxt("orderSuggestion",m.orderSuggestion,1))}
+  <div class="sub mono" style="margin-top:6px">Last Change:${esc(m.lastChange||"")}</div>
+ </div>`;
+}
+
+function promptTx(id){
+ const p=findPos(id);if(!p)return;
+ const side=prompt(p.ticker+"("+p.broker+")交易方向:輸入 B(買) 或 S(賣)","S");if(side===null)return;
+ const s=side.trim().toUpperCase().startsWith("B")?"Buy":"Sell";
+ const sh=parseFloat(prompt("股數(整數,實股數制)",""));if(isNaN(sh)||sh<=0)return toast("股數無效");
+ const px=parseFloat(prompt("成交價("+p.quoteCurrency+")",""));if(isNaN(px)||px<=0)return toast("價格無效");
+ const note=prompt("備註(選填,如:停利1觸發)","")||"";
+ Repo.addTransaction(id,s,sh,px,note);
+}
+function promptEdit(id,field,isManual,isNum){
+ const p=findPos(id);if(!p)return;
+ const cur=isManual?Store.data.manual[p.ticker][field]:p[field];
+ const v=prompt(p.ticker+" · "+field+(isNum?"(數字)":""),cur??"");
+ if(v===null)return;
+ const reason=prompt("修改原因(選填,寫入 Decision Log)","")||undefined;
+ let val=v.trim()===""?null:(isNum?parseFloat(v):v.trim());
+ if(isNum&&val!=null&&isNaN(val)){toast("需輸入數字");return;}
+ if(isManual)Repo.setManual(p.ticker,field,val,reason);else Repo.setPosition(id,field,val,reason);
+}
+function editFx(){
+ const v=prompt("USD/TWD 匯率(也可按報價引擎自動抓)",Store.data.settings.fxUSDTWD??"");
+ if(v===null)return;const n=parseFloat(v);if(isNaN(n)){toast("需輸入數字");return;}
+ Repo.setSetting("fxUSDTWD",n,"USD/TWD 匯率");
+}
+function openBackup(){
+ const box=document.createElement("div");box.className="modal";box.onclick=e=>{if(e.target===box)box.remove();};
+ box.innerHTML='<div class="mbox"><div class="clabel" style="color:var(--amber)">系統備份 JSON(相容 v2/v3 格式)</div><textarea id="iotext" rows="12" style="font-family:ui-monospace,monospace;font-size:11px"></textarea><div style="display:flex;gap:8px;margin-top:10px"><button class="btn sec" onclick="navigator.clipboard.writeText(document.getElementById(\'iotext\').value).then(()=>toast(\'已複製\'))">複製</button><button class="btn" onclick="doImport()">匯入覆蓋</button><button class="btn sec" style="margin-left:auto" onclick="this.closest(\'.modal\').remove()">關閉</button></div><div class="sub" style="margin-top:8px">注意:此版種子已含 2026/07/09 最新持股(4958=40股、LAES 雙帳戶)。若從 v2 匯入舊備份會覆蓋成舊持股,匯入前想清楚。</div></div>';
+ document.body.appendChild(box);
+ document.getElementById("iotext").value=JSON.stringify(Store.data,null,2);
+}
+function doImport(){
+ const raw=document.getElementById("iotext").value.trim();
+ if(raw.toUpperCase()==="RESET"){
+  Store.data=freshData();Store.persist();document.querySelector(".modal").remove();render();
+  toast("已重置為 2026/07/09 最新持股種子(4958=40股、LAES 雙帳戶)");return;
+ }
+ try{
+  const o=migrate(JSON.parse(raw));
+  o.decisionLog.unshift({ts:now(),ticker:"SYSTEM",field:"import",oldVal:"-",newVal:"匯入 "+o.positions.length+" 個部位",reason:"JSON 匯入覆蓋"});
+  Store.data=o;Store.persist();document.querySelector(".modal").remove();render();toast("匯入成功");
+ }catch(e){toast("JSON 格式錯誤:"+e.message);}
+}
+
+Store.load();render();
+</script>
+</body>
+</html>
