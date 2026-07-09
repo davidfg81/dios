@@ -65,7 +65,7 @@ h2{font-size:18px;margin:4px 0;display:flex;gap:8px;align-items:baseline;flex-wr
 <body>
 <header>
   <div class="hrow">
-    <span class="logo">DIOS</span><span class="ver">v3.1-S1 · Web</span>
+    <span class="logo">DIOS</span><span class="ver">v3.2 · Web</span>
     <div class="hbtns">
       <button class="chip" onclick="editFx()">USD/TWD <b id="fxval" style="color:var(--amber)">缺</b></button>
       <button class="chip" onclick="openBackup()">備份</button>
@@ -130,7 +130,7 @@ function seedManual(){return {
 };}
 function freshData(){return {
  version:VERSION,
- settings:{fxUSDTWD:null,cashTWD:null,cashUSD:null,finmindToken:null,
+ settings:{fxUSDTWD:null,cashTWD:null,cashUSD:null,finmindToken:null,finnhubToken:null,
   targetAlloc:{"半導體/記憶體":25,"ETF":35,"PCB/CCL":15,"量子/太空/其他":10,"現金":15}},
  positions:seedPositions(),manual:seedManual(),
  transactions:[ // Append-only 交易紀錄
@@ -244,21 +244,38 @@ const FinMind={
   return mid>0?Math.round(mid*1000)/1000:null;
  }
 };
-const USProvider={ready:false}; // Stage 2:Finnhub 直連 → 或 Cloudflare Worker
+const Finnhub={ // 美股即時報價(免費 Token,瀏覽器可直連)
+ async quote(sym){
+  const t=Store.data.settings.finnhubToken;if(!t)throw new Error("no-token");
+  const r=await fetch("https://finnhub.io/api/v1/quote?symbol="+encodeURIComponent(sym)+"&token="+encodeURIComponent(t));
+  if(!r.ok)throw new Error("HTTP "+r.status);
+  const j=await r.json();
+  if(j==null||j.c==null||j.c===0)return null;
+  return {ticker:sym,price:j.c,date:today()};
+ }
+};
 
 async function updateQuotes(){
  const btn=document.getElementById("updbtn");if(btn){btn.disabled=true;btn.textContent="更新中…";}
- const tw=[...new Set(Store.data.positions.filter(p=>p.market==="TW").map(p=>p.ticker))];
- const results=[],fails=[];
+ const d=Store.data;
+ const tw=[...new Set(d.positions.filter(p=>p.market==="TW").map(p=>p.ticker))];
+ const us=[...new Set(d.positions.filter(p=>p.market==="US").map(p=>p.ticker))];
+ const twR=[],fails=[];let usR=[],usMsg="";
  try{
-  const settled=await Promise.allSettled(tw.map(id=>FinMind.twClose(id)));
-  settled.forEach((s,i)=>{if(s.status==="fulfilled"&&s.value)results.push(s.value);else fails.push(tw[i]);});
+  if(d.settings.finnhubToken){
+   const su=await Promise.allSettled(us.map(s=>Finnhub.quote(s)));
+   su.forEach((s,i)=>{if(s.status==="fulfilled"&&s.value)usR.push(s.value);else fails.push(us[i]);});
+   if(usR.length)Repo.applyQuotes(usR,null,"Finnhub");
+   usMsg="美股 "+usR.length+"/"+us.length+" 檔(即時)";
+  }else usMsg="美股略過(未設 Finnhub Token)";
+  const st=await Promise.allSettled(tw.map(id=>FinMind.twClose(id)));
+  st.forEach((s,i)=>{if(s.status==="fulfilled"&&s.value)twR.push(s.value);else fails.push(tw[i]);});
   let fx=null;try{fx=await FinMind.fxUSD();}catch(e){fails.push("匯率");}
-  Repo.applyQuotes(results,fx,"FinMind");
+  Repo.applyQuotes(twR,fx,"FinMind");
   const qd=Store.data.quoteMeta.quoteDateTW;
-  Store.log("SYSTEM","報價更新","-","台股 "+results.length+"/"+tw.length+" 檔(收盤日 "+qd+")"+(fx!=null?",匯率 "+fx:"")+(fails.length?",失敗:"+fails.join("、"):""),"一鍵更新(FinMind 日收盤)");
+  Store.log("SYSTEM","報價更新","-","台股 "+twR.length+"/"+tw.length+"(收盤日 "+qd+");"+usMsg+(fx!=null?";匯率 "+fx:"")+(fails.length?";失敗:"+fails.join("、"):""),"一鍵更新");
   Store.persist();
-  toast("完成:台股 "+results.length+" 檔(收盤日 "+qd+")"+(fx!=null?" + 匯率":"")+"。註:日收盤資料,當日收盤價於收盤後更新;美股 Stage 2。");
+  toast("完成:台股 "+twR.length+" 檔(收盤日 "+qd+")· "+usMsg+(fx!=null?" · 匯率 "+fx:"")+(fails.length?" · 失敗:"+fails.join("、"):""));
  }catch(e){toast("更新失敗:"+e.message);}
  finally{if(btn){btn.disabled=false;btn.textContent="⟳ 更新報價";}render();}
 }
@@ -283,7 +300,7 @@ function aggregates(){ // 同 ticker 跨帳戶合計
 
 /* ---------- UI ---------- */
 let tab="dashboard",sel=null;
-const TABS=[["dashboard","Dashboard"],["portfolio","Portfolio"],["manual","Manual"],["log","Log"],["import","Import·S2"],["consensus","Consensus·S2"],["watchlist","Watchlist·S2"],["risk","Risk·S2"],["graph","Graph·S2"],["formats","Formats·S2"]];
+const TABS=[["dashboard","Dashboard"],["import","Import"],["consensus","Consensus"],["portfolio","Portfolio"],["manual","Manual"],["watchlist","Watchlist"],["risk","Risk"],["graph","Graph"],["formats","Formats"],["log","Log"]];
 function toast(m){const t=document.getElementById("toast");t.textContent=m;t.style.display="block";clearTimeout(t._h);t._h=setTimeout(()=>t.style.display="none",4200);}
 function missing(t){return '<span class="missing">'+(t||"Data Missing")+'</span>';}
 function typeCls(t){return t==="Core"?"core":t==="Satellite"?"sat":t==="Tactical"?"tac":"exitc";}
@@ -299,7 +316,12 @@ function render(){
  else if(tab==="portfolio")m.innerHTML=viewPortfolio();
  else if(tab==="manual")m.innerHTML=viewManual();
  else if(tab==="log")m.innerHTML=viewLog();
- else m.innerHTML='<div class="stage2">此模組於 Stage 2 移植<br>(Import / Consensus / Watchlist / Risk / Graph / Formats)</div>';
+ else if(tab==="import")m.innerHTML=viewImport();
+ else if(tab==="consensus")m.innerHTML=viewConsensus();
+ else if(tab==="watchlist")m.innerHTML=viewWatchlist();
+ else if(tab==="risk")m.innerHTML=viewRisk();
+ else if(tab==="graph")m.innerHTML=viewGraph();
+ else if(tab==="formats")m.innerHTML=viewFormats();
 }
 function go(t){tab=t;sel=null;render();window.scrollTo(0,0);}
 function open_(id){sel=id;render();window.scrollTo(0,0);}
@@ -317,11 +339,22 @@ function viewDashboard(){
  <div class="card warn"><div class="clabel">▍QUOTE ENGINE 報價引擎</div>
   <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
    <button class="btn" id="updbtn" onclick="updateQuotes()">⟳ 更新報價</button>
-   <span class="sub">FinMind 日收盤 · 台股 ${[...new Set(ps.filter(p=>p.market==="TW").map(p=>p.ticker))].length} 檔 + 匯率<br>報價日:<b style="color:var(--amber)">${d.quoteMeta.quoteDateTW??"—"}</b> · 上次執行:${d.quoteMeta.lastTW??"從未"}<br>當日收盤價於收盤後供應 · 美股 Stage 2</span>
+   <span class="sub">台股:FinMind 日收盤 · 美股:Finnhub 即時 · 匯率:FinMind<br>台股報價日:<b style="color:var(--amber)">${d.quoteMeta.quoteDateTW??"—"}</b> · 上次執行:${d.quoteMeta.lastTW??"從未"}</span>
+  </div>
+  <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+   <button class="chip" onclick="setToken('finnhubToken','Finnhub')">Finnhub Token ${d.settings.finnhubToken?"✓":"未設(美股需要)"}</button>
+   <button class="chip" onclick="setToken('finmindToken','FinMind')">FinMind Token ${d.settings.finmindToken?"✓":"選填"}</button>
   </div></div>
  <div class="card warn"><div class="clabel">▍TODAY'S ACTION 今日作戰指令</div>
   ${tb&&tb.action?tb.action.map((x,i)=>'<div style="padding:2px 0">'+["①","②","③","④","⑤","⑥","⑦","⑧"][i]+' <b class="tk" style="color:var(--amber)">'+esc(x.t)+'</b> '+esc(x.txt)+'</div>').join(""):'<span class="sub">由 Report Import(Stage 2)自動生成。</span>'}
  </div>
+ <div class="grid2">
+  <div class="card"><div class="clabel">▍今日最大風險</div><span style="font-size:13px">${tbField("risk")!=null?esc(tbField("risk")):missing("待 Import")}</span></div>
+  <div class="card"><div class="clabel">▍今日最大機會</div><span style="font-size:13px">${tbField("opportunity")!=null?esc(tbField("opportunity")):missing("待 Import")}</span></div>
+  <div class="card"><div class="clabel">▍資金計畫</div><span style="font-size:13px">${tbField("cash_plan")!=null?esc(tbField("cash_plan")):missing("待 Import")}</span></div>
+  <div class="card"><div class="clabel">▍今日警示</div><span style="font-size:13px">${tbField("warning")!=null?esc(tbField("warning")):missing("待 Import")}</span></div>
+ </div>
+ <div style="height:10px"></div>
  <div class="grid2">
   <div class="card"><div class="clabel">▍總資產 (TWD 含現金)</div><div class="big">${fmt(total+cash,0)??"—"}</div>${(miss.length||d.settings.fxUSDTWD==null)?'<div class="sub" style="color:#f59e0b;margin-top:4px">部分計算:'+miss.length+' 檔缺報價'+(d.settings.fxUSDTWD==null?"、缺匯率":"")+'</div>':""}</div>
   <div class="card"><div class="clabel">▍未實現損益 (TWD)</div><div class="big ${plCls(pl)}">${pl>0?"+":""}${fmt(pl,0)??"—"}</div><div class="sub" style="margin-top:4px">已實現(估):<span class="${plCls(realized)}">${realized?((realized>0?"+":"")+fmt(realized,0)):"—"}</span></div></div>
@@ -333,7 +366,9 @@ function viewDashboard(){
  </div>
  <div class="card"><div class="clabel">▍最該減碼 / 出場候選</div>
   ${exitC.length?exitC.map(p=>'<button class="row" onclick="open_(\''+p.id+'\')"><span class="tk" style="color:var(--rose)">'+p.ticker+'</span><span class="sub">'+esc(p.status)+' · '+esc(p.notes||"")+'</span></button>').join(""):'<span class="sub">無</span>'}
- </div>`;
+ </div>
+ ${d.validation.length?'<div class="card"><div class="clabel">▍判斷驗證(最近)</div>'+d.validation[0].validated.map(v=>'<div style="color:var(--up);font-size:13px">✓ '+esc(v)+'</div>').join("")+d.validation[0].invalidated.map(v=>'<div style="color:var(--down);font-size:13px">✗ '+esc(v)+'</div>').join("")+'<div class="sub" style="margin-top:4px">'+esc(d.validation[0].date)+' · '+esc(d.validation[0].source)+'</div></div>':''}
+ ${d.majorEvents.length?'<div class="card"><div class="clabel">▍重大事件</div>'+d.majorEvents.slice(0,6).map(e=>'<div style="font-size:13px;padding:2px 0">⚑ <span class="mono" style="color:var(--amber)">'+esc(e.tag||"")+'</span> '+esc(e.desc||"")+' <span class="sub">('+esc(e.date||"")+' '+esc(e.source||"")+')</span></div>').join("")+'</div>':''}`;
 }
 
 function viewPortfolio(){
@@ -380,6 +415,7 @@ function viewDetail(id){
   <div class="card"><div class="clabel">已實現損益</div><span class="mono ${plCls(p.realizedPL)}">${p.realizedPL!=null?(p.realizedPL>0?"+":"")+fmt(p.realizedPL,2):"—"}</span></div>
  </div>
  <div style="height:10px"></div>
+ ${(function(){const rep=d.aiReports[p.ticker]||{};const cs=d.consensus[p.ticker];const keys=Object.keys(rep);if(!keys.length)return"";return '<div class="card"><div class="clabel">▍AI 交叉驗證('+p.ticker+')</div>'+keys.map(s=>{const v=rep[s];return '<div style="font-size:13px;padding:3px 0;border-bottom:1px solid var(--line)"><span class="mono" style="color:var(--amber)">'+s+'</span> <span class="mono" style="color:'+actColor(v.action)+'">'+esc(v.action||"—")+'</span>'+(v.health!=null?' <span class="mono">健康'+v.health+'</span>':'')+(v.confidence?' <span style="color:var(--amber)">'+"★".repeat(v.confidence)+'</span>':'')+'<div class="sub">'+esc(v.reason||"")+(v.risk?' · 風險:'+esc(v.risk):'')+' ('+esc(v.date||"")+')</div></div>';}).join("")+(cs?'<div class="sub" style="margin-top:6px">共識:'+(cs.humanReview?'⚠ Human Review':esc(cs.final))+' '+cs.pct+'%'+(cs.disagreement?' · 分歧:'+esc(cs.disagreement):'')+'</div>':'')+'</div>';})()}
  <div class="card"><div class="clabel">▍交易(Append,成本自動推算)</div>
   <button class="btn sec" onclick="promptTx('${id}')">＋記錄交易</button>
   ${txs.length?'<div style="margin-top:8px">'+txs.map(t=>'<div class="sub" style="padding:2px 0"><span class="mono">'+t.ts+'</span> <span style="color:'+(t.side==="Buy"?"var(--up)":"var(--down)")+'">'+t.side+'</span> '+t.shares+' 股 @ '+t.price+(t.realized!=null?' · 已實現 <span class="'+plCls(t.realized)+'">'+(t.realized>0?"+":"")+fmt(t.realized,2)+'</span>':"")+(t.note?' · '+esc(t.note):"")+'</div>').join("")+'</div>':'<div class="sub" style="margin-top:6px">此帳戶尚無交易紀錄。</div>'}
@@ -443,6 +479,209 @@ function doImport(){
   Store.data=o;Store.persist();document.querySelector(".modal").remove();render();toast("匯入成功");
  }catch(e){toast("JSON 格式錯誤:"+e.message);}
 }
+
+/* ============ Stage 2:Import / Consensus / Watchlist / Risk / Graph / Formats ============ */
+function actColor(a){return a==="Buy"||a==="Add"?"var(--up)":a==="Reduce"||a==="Sell"||a==="Exit"?"var(--down)":"var(--txt)";}
+function tbField(k){const tb=Store.data.todayBoard;if(!tb||!tb.fields||!tb.fields[k])return null;const arr=tb.fields[k];const u=[...new Set(arr.map(x=>x.v))];return u.length===1?u[0]:arr.map(x=>x.src+":"+x.v).join(" / ");}
+function setToken(key,label){
+ const v=prompt(label+" API Token(留空清除)",Store.data.settings[key]||"");
+ if(v===null)return;Repo.setSetting(key,v.trim()||null,label+" Token");
+}
+
+/* ---- Import 解析:只認 dios JSON 塊 ---- */
+function extractReports(text){
+ const out=[],errs=[];const re=/```dios([\s\S]*?)```/g;let m,i=0;
+ while((m=re.exec(text))){i++;try{const o=JSON.parse(m[1].trim());if(!o.source||!o.report_type)throw new Error("缺 source 或 report_type");out.push(o);}catch(e){errs.push("第 "+i+" 個 dios 塊解析失敗:"+e.message);}}
+ if(!out.length&&!errs.length)errs.push("未找到 dios 資料塊。請確認報告底部含 ```dios ... ``` JSON。");
+ return {reports:out,errs};
+}
+const MANUAL_MAP={build_zone:"buildZone",add_zone:"addZone",tp1:"tp1",tp2:"tp2",tp3:"tp3",buy_back:"buyBack",invalid:"invalid",catalysts:"catalysts",risk_factors:"riskFactors",key_support:"keySupport",key_resistance:"keyResistance",order_suggestion:"orderSuggestion"};
+
+/* ---- 匯入引擎:全模組更新 ---- */
+function applyImport(reports){
+ const d=Store.data,srcs=[];
+ reports.forEach(r=>{
+  const src=r.source,tag=src+" "+r.report_type+" "+(r.date||"");srcs.push(src+"/"+r.report_type);
+  if(r.fx_usdtwd!=null&&r.fx_usdtwd!==d.settings.fxUSDTWD){Store.log("SYSTEM","USD/TWD",d.settings.fxUSDTWD,r.fx_usdtwd,tag);d.settings.fxUSDTWD=r.fx_usdtwd;}
+  (r.stocks||[]).forEach(s=>{
+   const tk=String(s.ticker),rows=d.positions.filter(x=>x.ticker===tk);
+   if(rows.length){
+    if(s.current_price!=null)rows.forEach(p=>{if(s.current_price!==p.currentPrice){Store.log(tk,"現價",p.currentPrice,s.current_price,tag);p.currentPrice=s.current_price;p.lastUpdated=r.date||today();}});
+    d.aiReports[tk]=d.aiReports[tk]||{};
+    d.aiReports[tk][src]={action:s.action??null,health:s.health_total??null,healthBreakdown:s.health_breakdown??null,priority:s.priority??null,confidence:s.confidence??null,reason:s.reason??null,risk:s.risk??null,date:r.date||today()};
+    if(s.manual_updates&&d.manual[tk])Object.entries(s.manual_updates).forEach(([k,v])=>{const f=MANUAL_MAP[k];if(!f)return;const mm=d.manual[tk];if(String(mm[f])===String(v))return;Store.log(tk,"手冊/"+f,mm[f],v,tag+":"+(s.reason||"報告更新"));mm[f]=v;mm.lastChange=(r.date||today())+" "+src+" 報告更新";});
+    if(s.today_advice&&d.manual[tk])d.manual[tk].todayAdvice=s.today_advice;
+    if(s.scenario){d.scenarios[tk]=d.scenarios[tk]||{};d.scenarios[tk][src]=s.scenario;}
+   }
+  });
+  (r.watchlist_updates||[]).forEach(wu=>{
+   let w=d.watchlist.find(x=>x.ticker===String(wu.ticker));
+   if(!w){w={ticker:String(wu.ticker),name:wu.name||"",market:wu.market||(/^[0-9]/.test(wu.ticker)?"TW":"US"),priority:null,score:null,confidence:null,expectedTime:null,catalyst:null,risk:null,expectedReturn:null};d.watchlist.push(w);Store.log(w.ticker,"Watchlist","-","新增",tag);}
+   ["name","priority","score","confidence","catalyst","risk"].forEach(k=>{if(wu[k]!=null)w[k]=wu[k];});
+   if(wu.expected_time!=null)w.expectedTime=wu.expected_time;
+   if(wu.expected_return!=null)w.expectedReturn=wu.expected_return;
+  });
+  (r.major_events||[]).forEach(e=>{const key=(e.tag||"")+"|"+(e.desc||"");if(!d.majorEvents.some(x=>(x.tag||"")+"|"+(x.desc||"")===key)){d.majorEvents.unshift(Object.assign({},e,{date:r.date||today(),source:src}));Store.log("EVENT",e.tag||"事件","-",e.desc,tag);}});
+  (r.graph_links||[]).forEach(l=>{if(Array.isArray(l)&&l.length>=2&&!d.graph.some(g=>g[0]===l[0]&&g[1]===l[1]))d.graph.push([l[0],l[1]]);});
+  if(r.metrics){if(r.metrics.beta!=null)d.metrics.beta=r.metrics.beta;if(r.metrics.sharpe!=null)d.metrics.sharpe=r.metrics.sharpe;const md=r.metrics.max_drawdown??r.metrics.maxDrawdown;if(md!=null)d.metrics.maxDrawdown=md;}
+  if((r.validated&&r.validated.length)||(r.invalidated&&r.invalidated.length))d.validation.unshift({date:r.date||today(),source:src,validated:r.validated||[],invalidated:r.invalidated||[]});
+  if(r.today){
+   if(!d.todayBoard||d.todayBoard.date!==(r.date||today()))d.todayBoard={date:r.date||today(),fields:{},sources:[],action:null};
+   if(!d.todayBoard.sources.includes(src))d.todayBoard.sources.push(src);
+   ["risk","opportunity","cash_plan","warning","best_hold","best_add","best_reduce","best_wait","one_liner"].forEach(k=>{if(r.today[k]!=null){d.todayBoard.fields[k]=d.todayBoard.fields[k]||[];d.todayBoard.fields[k].push({src,v:r.today[k]});}});
+  }
+ });
+ // Consensus Engine(以 ticker 為單位;≥67% 採納,<67% Human Review)
+ let agreeSum=0,agreeN=0;
+ [...new Set(d.positions.map(p=>p.ticker))].forEach(tk=>{
+  const rep=d.aiReports[tk];if(!rep)return;
+  const entries=Object.entries(rep).filter(([,v])=>v.action);if(!entries.length)return;
+  const count={};entries.forEach(([,v])=>count[v.action]=(count[v.action]||0)+1);
+  const top=Object.entries(count).sort((a,b)=>b[1]-a[1])[0];
+  const pct=Math.round(top[1]/entries.length*100);
+  const minority=entries.filter(([,v])=>v.action!==top[0]).map(([s,v])=>s+": "+v.action+(v.reason?"("+v.reason+")":""));
+  const humanReview=entries.length>=2&&pct<67;
+  const old=d.consensus[tk];
+  d.consensus[tk]={pct,final:humanReview?"Human Review":top[0],disagreement:minority.join(";"),humanReview,n:entries.length};
+  if(!old||old.final!==d.consensus[tk].final||old.pct!==pct)Store.log(tk,"Consensus",old?old.final+" "+old.pct+"%":"-",d.consensus[tk].final+" "+pct+"%","共識引擎("+entries.length+" AI)");
+  agreeSum+=pct;agreeN++;
+  const healths=Object.values(rep).map(v=>v.health).filter(v=>v!=null);
+  if(healths.length){const avg=Math.round(healths.reduce((a,b)=>a+b,0)/healths.length);d.positions.filter(p=>p.ticker===tk).forEach(p=>{if(avg!==p.healthScore){Store.log(tk,"健康分數",p.healthScore,avg,healths.length+" AI 平均");p.healthScore=avg;}});}
+ });
+ if(agreeN){const day=today();d.consensusHistory=d.consensusHistory.filter(x=>x.date!==day);d.consensusHistory.unshift({date:day,agreePct:Math.round(agreeSum/agreeN)});}
+ // Today's Action 自動生成(禁止人工輸入)
+ if(d.todayBoard){
+  const lines=[],seen=new Set();
+  [...d.positions].sort((a,b)=>(PRI[a.priority]??9)-(PRI[b.priority]??9)).forEach(p=>{
+   if(seen.has(p.ticker))return;seen.add(p.ticker);
+   const c=d.consensus[p.ticker];if(!c)return;
+   const adv=d.manual[p.ticker]?d.manual[p.ticker].todayAdvice:null;
+   if(c.humanReview)lines.push({t:p.ticker,txt:"⚠ 三 AI 分歧(共識 "+c.pct+"%)→ 需人工判斷。"+c.disagreement});
+   else if(c.final&&c.final!=="Hold")lines.push({t:p.ticker,txt:c.final+"(共識 "+c.pct+"%)"+(adv?" — "+adv:"")});
+   else if(adv&&adv!=="Hold")lines.push({t:p.ticker,txt:adv});
+  });
+  if(!lines.length)lines.push({t:"ALL",txt:"全數 Hold,今日不動作、不建倉。"});
+  d.todayBoard.action=lines;
+ }
+ Store.log("SYSTEM","Import","-","匯入 "+reports.length+" 份報告("+srcs.join("、")+")","Report Import → 全模組更新完成");
+ Store.persist();
+}
+
+let importText="",importPreview=null;
+function viewImport(){
+ const pv=importPreview;
+ return '<div class="card warn"><div class="clabel">▍REPORT IMPORT(可同時貼 ChatGPT + Claude + Gemini)</div>'+
+ '<div class="sub" style="margin-bottom:6px">貼 1–3 份 AI 報告全文(含底部 dios 資料塊),系統只解析 dios 塊。</div>'+
+ '<textarea id="imptext" rows="9" style="font-family:ui-monospace,monospace;font-size:11px" oninput="importText=this.value" placeholder="貼上報告全文…">'+esc(importText)+'</textarea>'+
+ '<div style="display:flex;gap:8px;margin-top:8px"><button class="btn sec" onclick="parseImport()">① 解析預覽</button><button class="btn" '+(pv&&pv.reports.length?'':'disabled')+' onclick="confirmImport()">② 確認匯入 → 全模組更新</button></div></div>'+
+ (pv?'<div class="card'+(pv.errs.length?' warn':'')+'"><div class="clabel">▍解析結果</div>'+pv.errs.map(e=>'<div style="color:var(--rose);font-size:13px">✗ '+esc(e)+'</div>').join("")+pv.reports.map(r=>'<div style="font-size:13px;padding:3px 0;border-bottom:1px solid var(--line)"><span class="mono" style="color:var(--amber)">'+esc(r.source)+'</span> · '+esc(r.report_type)+' · '+esc(r.date||"無日期")+' · 個股 '+((r.stocks||[]).length)+' 檔'+(r.fx_usdtwd?' · 匯率 '+r.fx_usdtwd:'')+(r.major_events&&r.major_events.length?' · 事件 '+r.major_events.length:'')+'</div>').join("")+'</div>':'')+
+ '<div class="card"><div class="clabel">▍每日流程</div><div class="sub" style="line-height:2">1. Formats 分頁複製指令(含持股快照)<br>2. 貼給 ChatGPT / Claude / Gemini 取得報告<br>3. 三份全文貼回本頁 → 解析 → 匯入<br>4. Consensus → Dashboard → Manual → Log → Watchlist → Graph → Health → Today\'s Action 一次完成</div></div>';
+}
+function parseImport(){importText=document.getElementById("imptext").value;importPreview=extractReports(importText);render();}
+function confirmImport(){if(!importPreview||!importPreview.reports.length)return;applyImport(importPreview.reports);importText="";importPreview=null;tab="dashboard";render();toast("匯入完成:全模組已更新");}
+
+/* ---- Consensus ---- */
+function viewConsensus(){
+ const d=Store.data,srcs=["ChatGPT","Claude","Gemini"],seen=new Set();
+ const ps=[...d.positions].sort((a,b)=>(PRI[a.priority]??9)-(PRI[b.priority]??9)).filter(p=>{if(seen.has(p.ticker))return false;seen.add(p.ticker);return true;});
+ const hist=d.consensusHistory;
+ return (hist.length?'<div class="card"><div class="clabel">▍每日三 AI 一致率</div><div style="display:flex;gap:14px;flex-wrap:wrap">'+hist.slice(0,7).map(h=>'<div style="text-align:center"><div class="mono" style="color:var(--amber);font-size:17px">'+h.agreePct+'%</div><div class="sub mono">'+h.date.slice(5)+'</div></div>').join("")+'</div></div>':'')+
+ '<div class="twrap"><table style="min-width:700px"><thead><tr><th>代碼</th><th>ChatGPT</th><th>Claude</th><th>Gemini</th><th>共識</th><th>Final</th><th>分歧</th></tr></thead><tbody>'+
+ ps.map(p=>{const rep=d.aiReports[p.ticker]||{};const c=d.consensus[p.ticker];
+  return '<tr onclick="open_(\''+p.id+'\')"><td class="tk">'+p.ticker+'</td>'+srcs.map(s=>'<td>'+(rep[s]?'<span class="mono" style="font-size:11px;color:'+actColor(rep[s].action)+'">'+esc(rep[s].action||"—")+(rep[s].health!=null?' '+rep[s].health:'')+'</span>':'<span class="sub">—</span>')+'</td>').join("")+
+  '<td class="mono">'+(c?c.pct+'%':'—')+'</td><td>'+(c?(c.humanReview?'<span class="st exit">Human Review</span>':'<span class="mono" style="font-size:11px;color:'+actColor(c.final)+'">'+esc(c.final)+'</span>'):'—')+'</td><td class="sub" style="max-width:180px">'+esc((c&&c.disagreement)||"—")+'</td></tr>';}).join("")+
+ '</tbody></table></div><div class="sub">共識 ≥67% 自動採納為 Final;&lt;67% 標記 Human Review 需人工判斷。點列看各 AI 完整理由。</div>';
+}
+
+/* ---- Watchlist ---- */
+function viewWatchlist(){
+ const d=Store.data;
+ return '<div style="display:flex;gap:8px;margin-bottom:10px"><input id="wladd" placeholder="新增代碼,如 NVDA / 2454" style="flex:1"><button class="btn" onclick="addWatch()">新增</button></div>'+
+ '<div class="twrap"><table style="min-width:820px"><thead><tr><th>代碼</th><th>Priority</th><th>Score</th><th>信心</th><th>預期時間</th><th>催化</th><th>風險</th><th>預期報酬</th><th></th></tr></thead><tbody>'+
+ d.watchlist.map((w,i)=>'<tr><td><span class="tk">'+esc(w.ticker)+'</span> <span class="sub">'+esc(w.market)+'</span></td>'+["priority","score","confidence","expectedTime","catalyst","risk","expectedReturn"].map(k=>'<td><button class="editv" onclick="promptWatch('+i+',\''+k+'\')">'+(w[k]!=null?esc(w[k]):missing())+'</button></td>').join("")+'<td><button class="editv sub" onclick="delWatch('+i+')">移除</button></td></tr>').join("")+
+ '</tbody></table></div><div class="sub">欄位由報告 watchlist_updates 自動填入,也可點值編輯。初始為 Data Missing,不做假設。</div>';
+}
+function addWatch(){
+ const t=(document.getElementById("wladd").value||"").trim().toUpperCase();if(!t)return;
+ const d=Store.data;if(d.watchlist.some(w=>w.ticker===t))return toast("已存在");
+ d.watchlist.push({ticker:t,name:"",market:/^[0-9]/.test(t)?"TW":"US",priority:null,score:null,confidence:null,expectedTime:null,catalyst:null,risk:null,expectedReturn:null});
+ Store.log(t,"Watchlist","-","新增","手動新增觀察標的");Store.persist();render();
+}
+function promptWatch(i,k){
+ const w=Store.data.watchlist[i];if(!w)return;
+ const v=prompt(w.ticker+" · "+k,w[k]??"");if(v===null)return;
+ const val=v.trim()===""?null:v.trim();
+ Store.log(w.ticker,"Watchlist/"+k,w[k],val,"Watchlist 更新");w[k]=val;Store.persist();render();
+}
+function delWatch(i){
+ const w=Store.data.watchlist[i];if(!w)return;if(!confirm("移除 "+w.ticker+"?"))return;
+ Store.log(w.ticker,"Watchlist","存在","移除","手動移除");Store.data.watchlist.splice(i,1);Store.persist();render();
+}
+
+/* ---- Risk / Allocation / Scenario ---- */
+function viewRisk(){
+ const d=Store.data,fx=d.settings.fxUSDTWD;let grand=0;const parts=[];
+ d.positions.forEach(p=>{const c=calc(p);if(c.mvTWD!=null){grand+=c.mvTWD;parts.push([p,c.mvTWD]);}});
+ const cashTWD=(d.settings.cashTWD||0)+((d.settings.cashUSD!=null&&fx!=null)?d.settings.cashUSD*fx:0);
+ const total=grand+cashTWD;const alerts=[];
+ if(total>0){
+  const byTk={};parts.forEach(([p,mv])=>byTk[p.ticker]=(byTk[p.ticker]||0)+mv);
+  Object.entries(byTk).forEach(([tk,mv])=>{const p=d.positions.find(x=>x.ticker===tk);const r=mv/total*100;if(r>25&&!(p.sector||"").startsWith("ETF"))alerts.push("單股集中:"+tk+" 佔 "+r.toFixed(1)+"%(>25%)");});
+  const bySec={};parts.forEach(([p,mv])=>{const key=/半導體|記憶體|PCB|CCL/.test(p.sector)?"半導體供應鏈":p.sector;bySec[key]=(bySec[key]||0)+mv;});
+  Object.entries(bySec).forEach(([s,v])=>{const r=v/total*100;if(r>50)alerts.push("產業集中:"+s+" 佔 "+r.toFixed(1)+"%(>50%)");});
+  const lev=parts.filter(([p])=>(p.sector||"").includes("槓桿")).reduce((a,x)=>a+x[1],0);
+  if(lev/total*100>15)alerts.push("槓桿 ETF 佔 "+(lev/total*100).toFixed(1)+"%(>15%),回檔虧損放大");
+  if(cashTWD/total*100<5)alerts.push("現金比例 "+(cashTWD/total*100).toFixed(1)+"%(<5%),無回補子彈");
+ }else alerts.push("Data Missing:需現價與匯率(先按 Dashboard 更新報價,現金在此頁填)");
+ const target=d.settings.targetAlloc||{};const cur={};
+ parts.forEach(([p,mv])=>{const key=/記憶體|晶圓/.test(p.sector)?"半導體/記憶體":/PCB|CCL/.test(p.sector)?"PCB/CCL":(p.sector||"").startsWith("ETF")?"ETF":"量子/太空/其他";cur[key]=(cur[key]||0)+mv;});
+ cur["現金"]=cashTWD;
+ return '<div class="card warn"><div class="clabel">▍RISK ENGINE 風險警示</div>'+(alerts.length?alerts.map(a=>'<div style="color:var(--amber);font-size:13px;padding:2px 0">⚠ '+esc(a)+'</div>').join(""):'<span class="sub">無超標警示</span>')+'</div>'+
+ '<div class="card"><div class="clabel">▍現金(點值編輯)</div><div style="display:flex;gap:16px" class="mono"><span>TWD <button class="editv mono" onclick="promptCash(\'cashTWD\')">'+(d.settings.cashTWD!=null?fmt(d.settings.cashTWD,0):missing())+'</button></span><span>USD <button class="editv mono" onclick="promptCash(\'cashUSD\')">'+(d.settings.cashUSD!=null?fmt(d.settings.cashUSD,0):missing())+'</button></span></div></div>'+
+ '<div class="card"><div class="clabel">▍ASSET ALLOCATION 目前 vs 目標</div>'+(total>0?Object.keys(Object.assign({},target,cur)).map(k=>{const c=(cur[k]||0)/total*100,t=target[k]!=null?target[k]:null,dev=t!=null?c-t:null;return '<div style="display:flex;gap:8px;align-items:center;font-size:12px;padding:2px 0"><span class="sub" style="width:100px">'+esc(k)+'</span><span class="mono" style="width:52px;text-align:right">'+fmt(c,1)+'%</span><span class="sub">/ 目標 '+(t!=null?t+"%":"—")+'</span>'+(dev!=null?'<span class="mono" style="margin-left:auto;color:'+(Math.abs(dev)>8?"var(--amber)":"var(--dim)")+'">'+(dev>0?"+":"")+fmt(dev,1)+"%"+(Math.abs(dev)>8?" ←再平衡":"")+'</span>':'')+'</div>';}).join(""):missing("需報價與匯率"))+'</div>'+
+ '<div class="card"><div class="clabel">▍風險係數(AI 報告帶入)</div><div class="sub mono">Beta '+(d.metrics.beta??"—")+' · Sharpe '+(d.metrics.sharpe??"—")+' · MaxDD '+(d.metrics.maxDrawdown??"—")+'</div></div>'+
+ '<div class="card"><div class="clabel">▍SCENARIO 三劇本(Bull/Base/Bear)</div>'+(Object.keys(d.scenarios).length?Object.entries(d.scenarios).map(([tk,bySrc])=>'<div style="padding:4px 0;border-bottom:1px solid var(--line)"><div class="tk" style="font-size:13px">'+esc(tk)+'</div>'+Object.entries(bySrc).map(([src,sc])=>'<div class="sub">'+esc(src)+':'+["bull","base","bear"].map(k=>sc[k]?k+" "+sc[k].target+"("+sc[k].prob+"%,"+esc(sc[k].time||"")+")":null).filter(Boolean).join(" · ")+'</div>').join("")+'</div>').join(""):missing("待報告 Import 帶入"))+'</div>';
+}
+function promptCash(k){
+ const v=prompt(k==="cashTWD"?"現金 TWD":"現金 USD",Store.data.settings[k]??"");
+ if(v===null)return;const n=v.trim()===""?null:parseFloat(v);
+ if(n!==null&&isNaN(n))return toast("需輸入數字");
+ Repo.setSetting(k,n,k==="cashTWD"?"現金 TWD":"現金 USD");
+}
+
+/* ---- Knowledge Graph ---- */
+function viewGraph(){
+ const d=Store.data,nodes={};
+ d.graph.forEach(g=>{nodes[g[0]]=nodes[g[0]]||new Set();nodes[g[0]].add(g[1]);});
+ const posByTk={};d.positions.forEach(p=>{if(!posByTk[p.ticker])posByTk[p.ticker]=p.id;});
+ return '<div class="sub" style="margin-bottom:8px">事件/主題 → 受影響持股,連結由報告 graph_links 自動擴充。</div>'+
+ Object.entries(nodes).map(([n,set])=>'<div class="card"><div class="clabel" style="color:var(--amber)">◆ '+esc(n)+'</div><div style="display:flex;flex-wrap:wrap;gap:6px">'+[...set].map(t=>posByTk[t]?'<button class="chip" style="color:var(--txt)" onclick="open_(\''+posByTk[t]+'\')">'+esc(t)+'</button>':'<span class="chip" style="color:var(--dimmer)">'+esc(t)+'</span>').join("")+'</div>'+d.majorEvents.filter(e=>e.tag===n).slice(0,2).map(e=>'<div class="sub" style="margin-top:6px">⚑ '+esc(e.desc)+'</div>').join("")+'</div>').join("");
+}
+
+/* ---- Report Format Generator(8 種,唯一資料交換格式) ---- */
+const FORMAT_DEFS=[["US_POSTMARKET","美股盤後 07:30","檢查美股收盤,評估對今日台股影響。"],["TW_PREMARKET","台股盤前 08:30","根據美股、ADR、期貨、新聞決定台股開盤策略。"],["TW_POSTMARKET","台股盤後 15:10","驗證盤前判斷、更新交易手冊。"],["US_PREMARKET","美股盤前 21:10","根據盤前、新聞、財報決定今晚美股操作。"],["WEEKLY_STRATEGY","每週策略 週六10:00","重排持股、調整信心、檢查換股。"],["MANUAL_UPDATE","Manual Update","只更新交易手冊區間與條件。"],["EVENT_UPDATE","重大事件","財報/法說/評等/政策/AI/HBM/CCL/PCB 即時標記。"],["FLASH","Flash 臨時","盤中突發,最小格式。"]];
+let fmtType="US_POSTMARKET";
+function buildTemplate(type){
+ const d=Store.data,def=FORMAT_DEFS.find(f=>f[0]===type),seen=new Set();
+ const snap={fx_usdtwd:d.settings.fxUSDTWD,
+  positions:d.positions.map(p=>({ticker:p.ticker,account:p.broker,market:p.market,shares:p.shares,avg_cost:p.avgCost,quote_ccy:p.quoteCurrency,current_price:p.currentPrice,type:p.positionType,priority:p.priority,status:p.status,health:p.healthScore})),
+  manual:{},watchlist:d.watchlist.map(w=>w.ticker)};
+ d.positions.forEach(p=>{if(seen.has(p.ticker))return;seen.add(p.ticker);const m=d.manual[p.ticker];if(m)snap.manual[p.ticker]={build:m.buildZone,add:m.addZone,tp1:m.tp1,tp2:m.tp2,tp3:m.tp3,buy_back:m.buyBack,invalid:m.invalid};});
+ const T="```";
+ const schema={source:"ChatGPT | Claude | Gemini(填你自己)",report_type:type,date:"YYYY-MM-DD",fx_usdtwd:31.5,
+  stocks:[{ticker:"MU",current_price:1050,action:"Hold",health_total:82,health_breakdown:{ai:90,institutional:80,earnings:85,valuation:70,technical:80,risk:75,trend:88},priority:"A+",confidence:4,reason:"一句話理由",risk:"一句話風險",today_advice:"不動 / 1120以上外幣帳戶賣1股",manual_updates:{tp1:"1150–1180 → 賣 1 股",key_support:"980",key_resistance:"1120"},scenario:{bull:{target:1400,prob:30,time:"2026Q4"},base:{target:1150,prob:50,time:"2026Q3"},bear:{target:880,prob:20,time:"2026Q3"}}}],
+  watchlist_updates:[{ticker:"NVDA",priority:"A",score:85,confidence:4,expected_time:"2026Q3",catalyst:"財報",risk:"估值",expected_return:"+15%"}],
+  major_events:[{tag:"HBM",desc:"事件描述",impact:["MU","2330"]}],graph_links:[["HBM","MU"]],
+  metrics:{beta:1.3,sharpe:1.1,max_drawdown:"-18%"},validated:["判斷X已驗證"],invalidated:["判斷Y已失效"],
+  today:{one_liner:"今日一句話",best_hold:"2330",best_add:"無",best_reduce:"KMEM",best_wait:"GLW",risk:"今日最大風險",opportunity:"今日最大機會",cash_plan:"資金計畫",warning:"警示"}};
+ return "# DIOS "+def[1]+" Report — 標準產出指令(v3 資料交換格式)\n\n你是投資分析 AI(ChatGPT / Claude / Gemini 其中之一)。請依下方持股快照與最新市場資訊,產出「"+def[1]+"」報告。\n用途:"+def[2]+"\n\n【鐵律】\n1. 出場/加碼建議必須用實際股數並指明帳戶(如「LAES 外幣帳戶賣 15 股」),禁止百分比賣法。\n2. 建議必須附觸發條件與理由,禁止情緒性建議。\n3. 資料不足填 null,不可假設(Data Missing 原則)。\n4. 報告最後必附一個 "+T+"dios JSON 塊,格式 100% 依 Schema,DIOS 只解析此塊。\n5. action 只允許:Buy / Add / Hold / Reduce / Sell / Exit / Wait。\n6. 上半部 Markdown 自由撰寫給人看;JSON 塊是唯一機器讀取部分。\n\n【持股與手冊快照(含多帳戶)】\n"+JSON.stringify(snap)+"\n\n【輸出格式 — 報告末尾必附】\n"+T+"dios\n"+JSON.stringify(schema,null,1)+"\n"+T+"\n說明:沒變化/不知道的欄位可省略或填 null;stocks 只列有更新的標的。"+(type==="FLASH"?"Flash 可只含 source/report_type/date/major_events/stocks。":"");
+}
+function viewFormats(){
+ return '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">'+FORMAT_DEFS.map(f=>'<button class="chip" style="'+(fmtType===f[0]?'border-color:var(--amber);color:var(--amber)':'')+'" onclick="fmtType=\''+f[0]+'\';render()">'+esc(f[1])+'</button>').join("")+'</div>'+
+ '<div class="card"><div class="clabel">▍標準指令(含即時持股快照,直接複製貼給任一 AI)</div><button class="btn" onclick="copyTpl()">一鍵複製</button><pre style="white-space:pre-wrap;font-size:11px;color:var(--dim);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;max-height:380px;overflow-y:auto;margin-top:8px">'+esc(buildTemplate(fmtType))+'</pre></div>'+
+ '<div class="sub">此為 DIOS 唯一資料交換格式:上半 Markdown 給人看,底部 dios JSON 給機器解析。任何 AI 產出、任何 AI 可驗證。</div>';
+}
+function copyTpl(){navigator.clipboard.writeText(buildTemplate(fmtType)).then(()=>toast("已複製,可貼給 ChatGPT / Claude / Gemini"));}
 
 Store.load();render();
 </script>
