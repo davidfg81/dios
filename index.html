@@ -329,9 +329,17 @@ function open_(id){sel=id;render();window.scrollTo(0,0);}
 
 function viewDashboard(){
  const d=Store.data,ps=[...d.positions].sort((a,b)=>(PRI[a.priority]??9)-(PRI[b.priority]??9));
- let total=0,pl=0,realized=0;const miss=ps.filter(p=>p.currentPrice==null);
- ps.forEach(p=>{const c=calc(p);if(c.mvTWD!=null)total+=c.mvTWD;if(c.plTWD!=null)pl+=c.plTWD;
-  if(p.realizedPL!=null){realized+=(p.quoteCurrency==="TWD"?p.realizedPL:(d.settings.fxUSDTWD!=null?p.realizedPL*d.settings.fxUSDTWD:0));}});
+ let pl=0,plTW=0,plUS=0,realized=0;
+ let twMV=0,usMV=0,twOK=0,twAll=0,usOK=0,usAll=0;
+ const fxv=d.settings.fxUSDTWD;
+ ps.forEach(p=>{const c=calc(p);
+  if(p.market==="TW"){twAll++;if(c.mv!=null){twMV+=c.mv;twOK++;}if(c.pl!=null)plTW+=c.pl;}
+  else{usAll++;if(c.mv!=null){usMV+=c.mv;usOK++;}if(c.pl!=null)plUS+=c.pl;}
+  if(c.plTWD!=null)pl+=c.plTWD;
+  if(p.realizedPL!=null){realized+=(p.quoteCurrency==="TWD"?p.realizedPL:(fxv!=null?p.realizedPL*fxv:0));}});
+ const usTWD=fxv!=null?usMV*fxv:null;
+ const miss=ps.filter(p=>p.currentPrice==null);
+ const total=twMV+(usTWD||0);
  const cash=(d.settings.cashTWD||0)+((d.settings.cashUSD!=null&&d.settings.fxUSDTWD!=null)?d.settings.cashUSD*d.settings.fxUSDTWD:0);
  const rank=[...ps].sort((a,b)=>(b.healthScore??-1)-(a.healthScore??-1));
  const exitC=ps.filter(p=>p.positionType==="Exit Candidate"||p.status==="Exit");
@@ -356,9 +364,17 @@ function viewDashboard(){
   <div class="card"><div class="clabel">▍今日警示</div><span style="font-size:13px">${tbField("warning")!=null?esc(tbField("warning")):missing("待 Import")}</span></div>
  </div>
  <div style="height:10px"></div>
+ <div class="card"><div class="clabel">▍資產分解 (ASSET BREAKDOWN)</div>
+  <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span class="sub">台股(TWD)· 已報價 ${twOK}/${twAll}</span><span class="mono">${twOK?fmt(twMV,0):"—"}</span></div>
+  <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span class="sub">美股(USD)· 已報價 ${usOK}/${usAll} 部位${usOK<usAll?' <span style="color:#f59e0b">⚠ '+(usAll-usOK)+' 部位未計入</span>':''}</span><span class="mono">${usOK?"US$ "+fmt(usMV,0):"—"}</span></div>
+  <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span class="sub">美股折合 TWD(匯率 ${fxv??"缺"})</span><span class="mono">${usTWD!=null&&usOK?fmt(usTWD,0):"—"}</span></div>
+  <div style="display:flex;justify-content:space-between;padding:3px 0;font-size:13px"><span class="sub">現金(TWD 折合)</span><span class="mono">${fmt(cash,0)}</span></div>
+  <div style="display:flex;justify-content:space-between;padding:6px 0 0;border-top:1px solid var(--line);margin-top:4px"><span class="sub">總資產 (TWD)</span><span class="big">${fmt(total+cash,0)}</span></div>
+  ${(miss.length||fxv==null)?'<div class="sub" style="color:#f59e0b;margin-top:6px">⚠ 部分計算:'+miss.length+' 個部位缺報價'+(fxv==null?"、缺匯率":"")+',總資產被低估,非真實全額</div>':""}
+ </div>
  <div class="grid2">
-  <div class="card"><div class="clabel">▍總資產 (TWD 含現金)</div><div class="big">${fmt(total+cash,0)??"—"}</div>${(miss.length||d.settings.fxUSDTWD==null)?'<div class="sub" style="color:#f59e0b;margin-top:4px">部分計算:'+miss.length+' 檔缺報價'+(d.settings.fxUSDTWD==null?"、缺匯率":"")+'</div>':""}</div>
-  <div class="card"><div class="clabel">▍未實現損益 (TWD)</div><div class="big ${plCls(pl)}">${pl>0?"+":""}${fmt(pl,0)??"—"}</div><div class="sub" style="margin-top:4px">已實現(估):<span class="${plCls(realized)}">${realized?((realized>0?"+":"")+fmt(realized,0)):"—"}</span></div></div>
+  <div class="card"><div class="clabel">▍未實現損益 台股 (TWD)</div><div class="big ${plCls(plTW)}">${plTW?(plTW>0?"+":"")+fmt(plTW,0):"—"}</div></div>
+  <div class="card"><div class="clabel">▍未實現損益 美股 (USD)</div><div class="big ${plCls(plUS)}">${plUS?(plUS>0?"+":"")+fmt(plUS,0):"—"}</div><div class="sub" style="margin-top:4px">已實現(估,TWD):<span class="${plCls(realized)}">${realized?((realized>0?"+":"")+fmt(realized,0)):"—"}</span></div></div>
  </div>
  <div style="height:10px"></div>
  ${aggs.length?'<div class="card"><div class="clabel">▍跨帳戶合計</div>'+aggs.map(a=>'<div style="padding:2px 0"><span class="tk">'+a.ticker+'</span> <span class="sub">合計 </span><span class="mono">'+a.shares+'</span><span class="sub"> 股 · 加權均價 </span><span class="mono">'+fmt(a.wavg,4)+'</span><span class="sub">('+a.accts+' 個帳戶)</span></div>').join("")+'</div>':""}
