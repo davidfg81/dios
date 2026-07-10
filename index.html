@@ -523,12 +523,46 @@ function setToken(key,label){
  if(v===null)return;Repo.setSetting(key,v.trim()||null,label+" Token");
 }
 
-/* ---- Import 解析:只認 dios JSON 塊 ---- */
+/* ---- Import 解析:三層容錯(dios 圍欄 → json 圍欄 → 全文掃描) ---- */
+function tryParse(s){
+ s=s.trim();
+ try{return JSON.parse(s);}catch(e){}
+ try{return JSON.parse(s.replace(/,\s*([}\]])/g,"$1"));}catch(e){} // 修復尾逗號
+ return null;
+}
+function scanJsonObjects(text){ // 全文找含 report_type 的完整 JSON(括號配對)
+ const out=[];let i=0;
+ while((i=text.indexOf("{",i))!==-1){
+  let depth=0,j=i,inStr=false,escp=false,closed=false;
+  for(;j<text.length;j++){
+   const ch=text[j];
+   if(inStr){if(escp)escp=false;else if(ch==="\\")escp=true;else if(ch==='"')inStr=false;}
+   else{if(ch==='"')inStr=true;else if(ch==="{")depth++;else if(ch==="}"){depth--;if(depth===0){closed=true;break;}}}
+  }
+  if(closed){
+   const cand=text.slice(i,j+1);
+   if(cand.indexOf("report_type")>-1){const o=tryParse(cand);if(o&&o.source&&o.report_type)out.push(o);}
+   i=j+1;
+  }else i++;
+ }
+ return out;
+}
 function extractReports(text){
- const out=[],errs=[];const re=/```dios([\s\S]*?)```/g;let m,i=0;
- while((m=re.exec(text))){i++;try{const o=JSON.parse(m[1].trim());if(!o.source||!o.report_type)throw new Error("缺 source 或 report_type");out.push(o);}catch(e){errs.push("第 "+i+" 個 dios 塊解析失敗:"+e.message);}}
- if(!out.length&&!errs.length)errs.push("未找到 dios 資料塊。請確認報告底部含 ```dios ... ``` JSON。");
- return {reports:out,errs};
+ const out=[],errs=[];
+ // 第一層:```dios 圍欄
+ let re=/```dios([\s\S]*?)```/g,m,i=0;
+ while((m=re.exec(text))){i++;const o=tryParse(m[1]);if(o&&o.source&&o.report_type)out.push(o);else errs.push("第 "+i+" 個 dios 塊格式錯誤,已嘗試自動修復失敗");}
+ // 第二層:```json 或無標記圍欄(一律執行)
+ re=/```(?:json)?\s*({[\s\S]*?})\s*```/g;while((m=re.exec(text))){const o=tryParse(m[1]);if(o&&o.source&&o.report_type)out.push(o);}
+ // 第三層:全文掃描(圍欄被介面吃掉也能救,一律執行)
+ scanJsonObjects(text).forEach(o=>out.push(o));
+ // 去重(同來源同類型同日期只留一份)
+ const seen={},dedup=[];
+ out.forEach(o=>{const k=o.source+"|"+o.report_type+"|"+(o.date||"");seen[k]=o;});
+ Object.values(seen).forEach(o=>dedup.push(o));
+ if(dedup.length)errs.length=0;
+ if(!dedup.length&&!errs.length)errs.push("未找到可解析的報告資料。請確認貼入的內容含有 source 與 report_type 的 JSON(有無 ``` 圍欄皆可)。若 AI 沒輸出 JSON,請回覆它:「請依指令重新輸出,報告末尾必須附上 dios JSON 資料塊」。");
+ return {reports:dedup,errs};
 }
 const MANUAL_MAP={build_zone:"buildZone",add_zone:"addZone",tp1:"tp1",tp2:"tp2",tp3:"tp3",buy_back:"buyBack",invalid:"invalid",catalysts:"catalysts",risk_factors:"riskFactors",key_support:"keySupport",key_resistance:"keyResistance",order_suggestion:"orderSuggestion"};
 
