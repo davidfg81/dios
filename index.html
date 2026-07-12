@@ -770,8 +770,21 @@ const Sync={
   if(!this.enabled()){c.innerHTML="☁ 同步 <b style='color:var(--dimmer)'>未設定</b>";}
   else if(this.cfg.dirty){c.innerHTML="☁ 同步 <b style='color:var(--amber)'>●未上傳</b>";}
   else{c.innerHTML="☁ 同步 <b style='color:#22c55e'>✓</b>";}},
+ async discover(){ // 新裝置沒有 gistId 時,自動到帳號裡找含 dios-data.json 的 Gist
+  for(let page=1;page<=3;page++){
+   const r=await fetch("https://api.github.com/gists?per_page=100&page="+page,{headers:this.headers()});
+   if(r.status===401)throw new Error("Token 無效或已過期(401)");
+   if(!r.ok)throw new Error("GitHub API 錯誤 "+r.status);
+   const list=await r.json();
+   if(!list.length)break;
+   const hit=list.find(g=>g.files&&g.files[GIST_FILE]);
+   if(hit){this.cfg.gistId=hit.id;this.save();toast("☁ 已自動找到雲端資料 Gist");return true;}
+   if(list.length<100)break;
+  }
+  return false;
+ },
  async fetchRemote(){ // 回傳 {meta:{ts,device,ver},data:{...}} 或 null
-  if(!this.cfg.gistId)return null;
+  if(!this.cfg.gistId){if(!this.enabled())return null;const found=await this.discover();if(!found)return null;}
   const r=await fetch("https://api.github.com/gists/"+this.cfg.gistId,{headers:this.headers()});
   if(r.status===404)return null;
   if(r.status===401)throw new Error("Token 無效或已過期(401)");
