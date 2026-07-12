@@ -69,6 +69,7 @@ h2{font-size:18px;margin:4px 0;display:flex;gap:8px;align-items:baseline;flex-wr
     <div class="hbtns">
       <button class="chip" onclick="editFx()">USD/TWD <b id="fxval" style="color:var(--amber)">缺</b></button>
       <button class="chip" onclick="openBackup()">備份</button>
+      <button class="chip" id="syncChip" onclick="openSync()">☁ 同步</button>
     </div>
   </div>
   <nav id="nav"></nav>
@@ -752,7 +753,149 @@ function viewFormats(){
 }
 function copyTpl(){navigator.clipboard.writeText(buildTemplate(fmtType)).then(()=>toast("已複製,可貼給 ChatGPT / Claude / Gemini"));}
 
+/* ============ ☁ GitHub Gist 雲端同步(跨裝置)v1.0 ============
+   原理:整包 Store.data 存到你 GitHub 帳號的 secret Gist。
+   Token / GistID 只存在各裝置 localStorage(dios-sync),永不上傳。
+   衝突防護:以雲端 meta.ts 與本機 lastSyncTs 比對,雙邊都變更時要求使用者選擇。 */
+const SYNC_KEY="dios-sync", GIST_FILE="dios-data.json";
+const Sync={
+ cfg:{}, ready:false, suppress:false, timer:null,
+ load(){try{this.cfg=JSON.parse(localStorage.getItem(SYNC_KEY))||{};}catch(e){this.cfg={};}if(this.cfg.auto===undefined)this.cfg.auto=true;},
+ save(){try{localStorage.setItem(SYNC_KEY,JSON.stringify(this.cfg));}catch(e){}},
+ enabled(){return !!this.cfg.token;},
+ device(){return /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)?"手機":"電腦";},
+ headers(){return {"Authorization":"Bearer "+this.cfg.token,"Accept":"application/vnd.github+json","Content-Type":"application/json"};},
+ fmtTs(ts){return ts?new Date(ts).toLocaleString("zh-TW",{hour12:false}):"—";},
+ refreshChip(){const c=document.getElementById("syncChip");if(!c)return;
+  if(!this.enabled()){c.innerHTML="☁ 同步 <b style='color:var(--dimmer)'>未設定</b>";}
+  else if(this.cfg.dirty){c.innerHTML="☁ 同步 <b style='color:var(--amber)'>●未上傳</b>";}
+  else{c.innerHTML="☁ 同步 <b style='color:#22c55e'>✓</b>";}},
+ async fetchRemote(){ // 回傳 {meta:{ts,device,ver},data:{...}} 或 null
+  if(!this.cfg.gistId)return null;
+  const r=await fetch("https://api.github.com/gists/"+this.cfg.gistId,{headers:this.headers()});
+  if(r.status===404)return null;
+  if(r.status===401)throw new Error("Token 無效或已過期(401)");
+  if(!r.ok)throw new Error("GitHub API 錯誤 "+r.status);
+  const g=await r.json();const f=g.files&&g.files[GIST_FILE];if(!f)return null;
+  let content=f.content;
+  if(f.truncated){const rr=await fetch(f.raw_url);content=await rr.text();}
+  const o=JSON.parse(content);
+  return o&&o.meta&&o.data?o:{meta:{ts:0,device:"?"},data:o}; // 容錯:舊格式裸資料
+ },
+ async push(opts){opts=opts||{};
+  if(!this.enabled())return toast("☁ 尚未設定 Token,請按「☁ 同步」設定");
+  try{
+   if(this.cfg.gistId&&!opts.force){
+    const remote=await this.fetchRemote().catch(()=>null);
+    if(remote&&remote.meta.ts>(this.cfg.lastSyncTs||0)){
+     if(opts.auto){this.refreshChip();return toast("⚠️ 雲端有其他裝置的新資料,已暫停自動上傳。請開啟「☁ 同步」處理");}
+     if(!confirm("⚠️ 雲端有更新的資料:\n"+remote.meta.device+" 於 "+this.fmtTs(remote.meta.ts)+" 上傳。\n\n確定要用「本機資料」覆蓋雲端嗎?\n(想改用雲端資料請按取消,再按「⬇ 下載」)"))return;
+    }
+   }
+   const ts=Date.now();
+   const payload={meta:{ts,device:this.device(),ver:VERSION},data:Store.data};
+   const body={description:"DIOS 資料同步(系統自動產生,勿手動編輯)",files:{}};
+   body.files[GIST_FILE]={content:JSON.stringify(payload)};
+   let r;
+   if(this.cfg.gistId){
+    r=await fetch("https://api.github.com/gists/"+this.cfg.gistId,{method:"PATCH",headers:this.headers(),body:JSON.stringify(body)});
+    if(r.status===404){this.cfg.gistId=null;this.save();return this.push(opts);} // Gist 被刪→重建
+   }else{
+    body.public=false;
+    r=await fetch("https://api.github.com/gists",{method:"POST",headers:this.headers(),body:JSON.stringify(body)});
+   }
+   if(r&&r.status===401)throw new Error("Token 無效或已過期,請重新產生");
+   if(r&&!r.ok)throw new Error("GitHub API 錯誤 "+r.status);
+   if(!r)return;
+   const g=await r.json();
+   this.cfg.gistId=g.id;this.cfg.lastSyncTs=ts;this.cfg.dirty=false;this.save();this.refreshChip();
+   if(!opts.silent)toast("☁ 已上傳雲端("+this.fmtTs(ts)+")");
+   const el=document.getElementById("syncStatus");if(el)el.innerHTML=this.statusHtml();
+  }catch(e){toast("☁ 上傳失敗:"+e.message);}
+ },
+ async pull(opts){opts=opts||{};
+  if(!this.enabled())return toast("☁ 尚未設定 Token");
+  try{
+   const remote=await this.fetchRemote();
+   if(!remote)return toast("☁ 雲端尚無資料,請先在有資料的裝置按「⬆ 上傳」");
+   if(this.cfg.dirty&&!opts.force){
+    if(!confirm("⚠️ 本機有尚未上傳的變更。\n下載會用雲端資料("+remote.meta.device+" "+this.fmtTs(remote.meta.ts)+")覆蓋本機。\n\n確定捨棄本機變更、改用雲端資料嗎?"))return;
+   }
+   this.suppress=true;
+   Store.data=migrate(remote.data);
+   Store.persist();
+   this.suppress=false;
+   this.cfg.lastSyncTs=remote.meta.ts;this.cfg.dirty=false;this.save();this.refreshChip();
+   render();toast("☁ 已載入雲端資料(來自"+remote.meta.device+" "+this.fmtTs(remote.meta.ts)+")");
+  }catch(e){this.suppress=false;toast("☁ 下載失敗:"+e.message);}
+ },
+ schedule(){clearTimeout(this.timer);this.timer=setTimeout(()=>this.push({auto:true,silent:true}),5000);},
+ statusHtml(){
+  return '狀態:'+(this.enabled()?(this.cfg.dirty?'<b style="color:var(--amber)">本機有未上傳變更</b>':'<b style="color:#22c55e">已同步</b>'):'<b style="color:var(--dimmer)">未設定</b>')+
+   ' · 上次同步:'+this.fmtTs(this.cfg.lastSyncTs)+
+   (this.cfg.gistId?' · Gist:'+esc(this.cfg.gistId.slice(0,8))+'…':' · Gist:首次上傳時自動建立');
+ },
+ async init(){
+  this.load();this.refreshChip();
+  if(!this.enabled()){this.ready=true;return;}
+  try{
+   const remote=await this.fetchRemote();
+   if(remote&&remote.meta.ts>(this.cfg.lastSyncTs||0)){
+    if(!this.cfg.dirty){ // 本機沒動過 → 安全自動載入雲端
+     this.suppress=true;Store.data=migrate(remote.data);Store.persist();this.suppress=false;
+     this.cfg.lastSyncTs=remote.meta.ts;this.save();this.refreshChip();render();
+     toast("☁ 已自動同步雲端最新資料(來自"+remote.meta.device+" "+this.fmtTs(remote.meta.ts)+")");
+    }else{
+     toast("⚠️ 雲端與本機都有變更!請按「☁ 同步」選擇保留哪一邊");
+    }
+   }else if(this.cfg.dirty&&this.cfg.auto){this.schedule();} // 上次沒傳完 → 補傳
+  }catch(e){toast("☁ 同步檢查失敗:"+e.message);}
+  this.ready=true;
+ }
+};
+/* 掛接 Store.persist:資料一變動就標記待上傳,並排程自動上傳 */
+const _origPersist=Store.persist.bind(Store);
+Store.persist=function(){_origPersist();
+ if(Sync.ready&&!Sync.suppress&&Sync.enabled()){Sync.cfg.dirty=true;Sync.save();Sync.refreshChip();if(Sync.cfg.auto)Sync.schedule();}
+};
+/* 切到背景/關頁前,盡力把未上傳變更送出 */
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden"&&Sync.enabled()&&Sync.cfg.dirty&&Sync.cfg.auto){clearTimeout(Sync.timer);Sync.push({auto:true,silent:true});}});
+function openSync(){
+ Sync.load();
+ const box=document.createElement("div");box.className="modal";box.onclick=e=>{if(e.target===box)box.remove();};
+ box.innerHTML='<div class="mbox">'+
+  '<div class="clabel" style="color:var(--amber)">☁ 跨裝置雲端同步(GitHub Gist)</div>'+
+  '<div class="sub" id="syncStatus" style="margin:6px 0 10px">'+Sync.statusHtml()+'</div>'+
+  '<div class="clabel">GitHub Token(classic,只勾 gist 權限)</div>'+
+  '<input id="syncToken" type="password" placeholder="'+(Sync.cfg.token?"已設定(留空=不變更)":"ghp_ 開頭的 Token")+'" style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--txt);padding:8px;font-family:ui-monospace,monospace;font-size:12px;margin:4px 0 10px">'+
+  '<label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:12px"><input type="checkbox" id="syncAuto" '+(Sync.cfg.auto?"checked":"")+'> 自動同步(開頁自動載入雲端新資料;變更後 5 秒自動上傳)</label>'+
+  '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+  '<button class="btn sec" onclick="saveSyncCfg()">儲存設定</button>'+
+  '<button class="btn" onclick="Sync.push()">⬆ 上傳(本機→雲端)</button>'+
+  '<button class="btn" onclick="Sync.pull()">⬇ 下載(雲端→本機)</button>'+
+  '<button class="btn sec" style="margin-left:auto" onclick="this.closest(\'.modal\').remove()">關閉</button>'+
+  '</div>'+
+  '<div class="sub" style="margin-top:10px;line-height:1.7">'+
+  '① 到 github.com/settings/tokens → Generate new token (classic) → 只勾 <b>gist</b> → 產生後貼上。<br>'+
+  '② 首次「⬆ 上傳」會自動建立 secret Gist,之後每台裝置貼同一組 Token 即可互通。<br>'+
+  '③ Token 只存在本裝置瀏覽器,不會被上傳;若過期重新產生一組貼上即可。'+
+  '</div></div>';
+ document.body.appendChild(box);
+}
+function saveSyncCfg(){
+ const t=document.getElementById("syncToken").value.trim();
+ const a=document.getElementById("syncAuto").checked;
+ if(t){
+  if(!/^(ghp_|github_pat_)/.test(t)&&!confirm("Token 格式看起來不像 GitHub Token(通常 ghp_ 開頭),仍要儲存嗎?"))return;
+  Sync.cfg.token=t;
+ }
+ Sync.cfg.auto=a;Sync.save();Sync.refreshChip();
+ const el=document.getElementById("syncStatus");if(el)el.innerHTML=Sync.statusHtml();
+ toast(t?"☁ Token 已儲存於本裝置":"☁ 設定已儲存");
+}
+
 Store.load();render();
+Sync.init();
 </script>
 </body>
 </html>
