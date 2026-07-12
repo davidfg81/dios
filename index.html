@@ -414,7 +414,7 @@ function viewPortfolio(){
   return '<div class="clabel">▍'+(mkt==="TW"?"台股 TW":"美股 US")+'</div><div class="twrap"><table><thead><tr><th>代碼/帳戶</th><th>股數</th><th>均價</th><th>現價</th><th>損益%</th><th>已實現</th><th>狀態</th></tr></thead><tbody>'+
   rows.map(p=>{const c=calc(p);return '<tr onclick="open_(\''+p.id+'\')"><td><div class="tk">'+p.ticker+' <span class="mono" style="color:var(--amber);font-size:11px">'+p.priority+'</span></div><div class="sub">'+esc(p.broker)+'</div></td><td class="mono">'+p.shares.toLocaleString()+'</td><td class="mono">'+fmt(p.avgCost)+'</td><td class="mono">'+(p.currentPrice!=null?fmt(p.currentPrice):missing())+'</td><td class="mono '+plCls(c.plPct)+'">'+(c.plPct!=null?(c.plPct>0?"+":"")+fmt(c.plPct)+"%":"—")+'</td><td class="mono '+plCls(p.realizedPL)+'">'+(p.realizedPL!=null?(p.realizedPL>0?"+":"")+fmt(p.realizedPL,0):"—")+'</td><td><span class="st '+stCls(p.status)+'">'+p.status+'</span></td></tr>';}).join("")+'</tbody></table></div>';
  };
- return block("TW")+block("US")+
+ return '<div style="margin-bottom:10px"><button class="btn" onclick="openAddPosition()">＋ 新增部位</button></div>'+block("TW")+block("US")+
  (aggs.length?'<div class="card"><div class="clabel">▍跨帳戶合計</div>'+aggs.map(a=>'<div style="padding:2px 0"><span class="tk">'+a.ticker+'</span> 合計 <span class="mono">'+a.shares+'</span> 股 · 加權均價 <span class="mono">'+fmt(a.wavg,4)+'</span></div>').join("")+'</div>':"")+
  '<div class="sub">點列進詳細頁。交易(買/賣)請用詳細頁「＋記錄交易」,成本自動推算、Append 保留歷史。</div>';
 }
@@ -585,11 +585,15 @@ function applyImport(reports){
    }
   });
   (r.watchlist_updates||[]).forEach(wu=>{
-   let w=d.watchlist.find(x=>x.ticker===String(wu.ticker));
-   if(!w){w={ticker:String(wu.ticker),name:wu.name||"",market:wu.market||(/^[0-9]/.test(wu.ticker)?"TW":"US"),priority:null,score:null,confidence:null,expectedTime:null,catalyst:null,risk:null,expectedReturn:null};d.watchlist.push(w);Store.log(w.ticker,"Watchlist","-","新增",tag);}
-   ["name","priority","score","confidence","catalyst","risk"].forEach(k=>{if(wu[k]!=null)w[k]=wu[k];});
+   const wtk=String(wu.ticker);
+   if(d.positions.some(p=>p.ticker===wtk))return; // 已是持股,不重複進觀察清單
+   let w=d.watchlist.find(x=>x.ticker===wtk);
+   if(!w){w={ticker:wtk,name:wu.name||"",market:wu.market||(/^[0-9]/.test(wtk)?"TW":"US"),priority:null,score:null,confidence:null,expectedTime:null,catalyst:null,risk:null,expectedReturn:null,entryZone:null,note:null,removeSuggest:null};d.watchlist.push(w);Store.log(wtk,"Watchlist","-",(wu.status==="New"?"AI 提名新增":"新增")+(wu.note?"("+wu.note+")":""),tag);}
+   ["name","priority","score","confidence","catalyst","risk","note"].forEach(k=>{if(wu[k]!=null)w[k]=wu[k];});
    if(wu.expected_time!=null)w.expectedTime=wu.expected_time;
    if(wu.expected_return!=null)w.expectedReturn=wu.expected_return;
+   if(wu.entry_zone!=null)w.entryZone=wu.entry_zone;
+   if(wu.status==="Remove"){const rs=src+"("+(r.date||today())+")建議剔除"+(wu.risk?":"+wu.risk:"");if(w.removeSuggest!==rs){Store.log(wtk,"Watchlist 剔除建議","-",rs,tag);w.removeSuggest=rs;}}
   });
   (r.major_events||[]).forEach(e=>{const key=(e.tag||"")+"|"+(e.desc||"");if(!d.majorEvents.some(x=>(x.tag||"")+"|"+(x.desc||"")===key)){d.majorEvents.unshift(Object.assign({},e,{date:r.date||today(),source:src}));Store.log("EVENT",e.tag||"事件","-",e.desc,tag);}});
   (r.graph_links||[]).forEach(l=>{if(Array.isArray(l)&&l.length>=2&&!d.graph.some(g=>g[0]===l[0]&&g[1]===l[1]))d.graph.push([l[0],l[1]]);});
@@ -667,14 +671,59 @@ function viewConsensus(){
 function viewWatchlist(){
  const d=Store.data;
  return '<div style="display:flex;gap:8px;margin-bottom:10px"><input id="wladd" placeholder="新增代碼,如 NVDA / 2454" style="flex:1"><button class="btn" onclick="addWatch()">新增</button></div>'+
- '<div class="twrap"><table style="min-width:820px"><thead><tr><th>代碼</th><th>Priority</th><th>Score</th><th>信心</th><th>預期時間</th><th>催化</th><th>風險</th><th>預期報酬</th><th></th></tr></thead><tbody>'+
- d.watchlist.map((w,i)=>'<tr><td><span class="tk">'+esc(w.ticker)+'</span> <span class="sub">'+esc(w.market)+'</span></td>'+["priority","score","confidence","expectedTime","catalyst","risk","expectedReturn"].map(k=>'<td><button class="editv" onclick="promptWatch('+i+',\''+k+'\')">'+(w[k]!=null?esc(w[k]):missing())+'</button></td>').join("")+'<td><button class="editv sub" onclick="delWatch('+i+')">移除</button></td></tr>').join("")+
- '</tbody></table></div><div class="sub">欄位由報告 watchlist_updates 自動填入,也可點值編輯。初始為 Data Missing,不做假設。</div>';
+ '<div class="twrap"><table style="min-width:940px"><thead><tr><th>代碼</th><th>Priority</th><th>Score</th><th>信心</th><th>預期時間</th><th>催化</th><th>風險</th><th>預期報酬</th><th>進場區間</th><th></th></tr></thead><tbody>'+
+ d.watchlist.map((w,i)=>'<tr><td><span class="tk">'+esc(w.ticker)+'</span> <span class="sub">'+esc(w.market)+'</span>'+(w.removeSuggest?'<div class="sub" style="color:var(--down);cursor:pointer" title="點擊可清除此建議" onclick="clearRemoveSuggest('+i+')">⚠ '+esc(w.removeSuggest)+'</div>':'')+(w.note?'<div class="sub">'+esc(w.note)+'</div>':'')+'</td>'+["priority","score","confidence","expectedTime","catalyst","risk","expectedReturn","entryZone"].map(k=>'<td><button class="editv" onclick="promptWatch('+i+',\''+k+'\')">'+(w[k]!=null?esc(w[k]):missing())+'</button></td>').join("")+'<td style="white-space:nowrap"><button class="editv" style="color:var(--amber)" onclick="watchToPosition('+i+')">轉持股</button> <button class="editv sub" onclick="delWatch('+i+')">移除</button></td></tr>').join("")+
+ '</tbody></table></div><div class="sub">欄位由報告 watchlist_updates 自動填入(含 AI 提名新標的與剔除建議),也可點值編輯。剔除建議僅供參考,按「移除」才會真正刪除。買進成交後按「轉持股」輸入帳戶/股數/成交價,即自動移入持股並納入之後所有戰報。</div>';
 }
+function clearRemoveSuggest(i){const w=Store.data.watchlist[i];if(!w||!w.removeSuggest)return;if(!confirm("清除 "+w.ticker+" 的剔除建議、繼續觀察?"))return;Store.log(w.ticker,"Watchlist 剔除建議",w.removeSuggest,"人工駁回,繼續觀察","使用者裁決");w.removeSuggest=null;Store.persist();render();}
+const ACCT_DEFS=[["5353959","台股現股 5353959","TW","TWD","TWD"],["L607568","美股台幣複委託 L607568","US","USD","TWD"],["G552118","美股外幣複委託 G552118","US","USD","USD"]];
+function watchToPosition(i){const w=Store.data.watchlist[i];if(!w)return;openAddPosition(w.ticker);}
+function openAddPosition(prefTicker){
+ document.querySelectorAll(".modal").forEach(m=>m.remove());
+ const box=document.createElement("div");box.className="modal";box.onclick=e=>{if(e.target===box)box.remove();};
+ const inp='style="width:100%;background:var(--bg);border:1px solid var(--line);border-radius:6px;color:var(--txt);padding:8px;font-family:ui-monospace,monospace;font-size:13px;margin:4px 0 10px"';
+ box.innerHTML='<div class="mbox"><div class="clabel" style="color:var(--amber)">＋ 新增部位(買進成交後填寫)</div>'+
+  '<div class="clabel">代碼</div><input id="apTicker" '+inp+' value="'+esc(prefTicker||"")+'" placeholder="如 2454 / NVDA">'+
+  '<div class="clabel">帳戶</div><select id="apAcct" '+inp+'>'+ACCT_DEFS.map(a=>'<option value="'+a[0]+'">'+a[1]+'('+a[2]+"/"+a[3]+')</option>').join("")+'</select>'+
+  '<div class="dgrid" style="grid-template-columns:1fr 1fr"><div><div class="clabel">股數</div><input id="apShares" type="number" '+inp+' placeholder="如 10"></div><div><div class="clabel">成交均價('+"報價幣別"+')</div><input id="apPrice" type="number" step="any" '+inp+' placeholder="如 1580"></div></div>'+
+  '<div class="clabel">名稱(選填)</div><input id="apName" '+inp+' placeholder="如 聯發科">'+
+  '<div style="display:flex;gap:8px"><button class="btn" onclick="doAddPosition()">確認新增</button><button class="btn sec" style="margin-left:auto" onclick="this.closest(\'.modal\').remove()">取消</button></div>'+
+  '<div class="sub" style="margin-top:8px">新增後:自動建立交易紀錄(Buy Append)與空白交易手冊,並自 watchlist 移入持股;手冊區間由下一份戰報的三 AI 分析自動填入。成本為對帳事實,之後僅能透過交易紀錄變動。</div></div>';
+ document.body.appendChild(box);
+ if(prefTicker&&/^[0-9]/.test(prefTicker))document.getElementById("apAcct").value="5353959";
+ else if(prefTicker)document.getElementById("apAcct").value="L607568";
+}
+function doAddPosition(){
+ const tk=(document.getElementById("apTicker").value||"").trim().toUpperCase();
+ const acct=document.getElementById("apAcct").value;
+ const sh=parseFloat(document.getElementById("apShares").value);
+ const px=parseFloat(document.getElementById("apPrice").value);
+ const nm=(document.getElementById("apName").value||"").trim();
+ if(!tk)return toast("請輸入代碼");
+ if(isNaN(sh)||sh<=0)return toast("股數需為正數");
+ if(isNaN(px)||px<=0)return toast("成交均價需為正數");
+ const A=ACCT_DEFS.find(a=>a[0]===acct);if(!A)return toast("請選擇帳戶");
+ const market=/^[0-9]/.test(tk)?"TW":"US";
+ if(market!==A[2])return toast(market==="TW"?"台股代碼請選台股帳戶 5353959":"美股代碼請選複委託帳戶 L607568 或 G552118");
+ const id=acct+"|"+market+"|"+tk;
+ if(Store.data.positions.some(p=>p.id===id))return toast("此帳戶已持有 "+tk+",加碼請至部位頁用「交易」記錄");
+ const pos={id,acctId:acct,ticker:tk,market,name:nm,shares:sh,avgCost:px,totalCostFixed:Math.round(sh*px*100)/100,
+  quoteCurrency:A[3],valuationCurrency:A[4],accountCurrency:A[4],marketCurrency:A[3],costCurrency:A[3],
+  broker:A[1],currentPrice:px,priceUpdatedAt:now(),positionType:"Tactical",sector:"",theme:[],priority:"B",healthScore:null,confidence:3,status:"Hold",realizedPL:null,lastUpdated:today(),notes:"手動新增部位 "+today()};
+ Store.data.positions.push(pos);
+ if(!Store.data.manual[tk])Store.data.manual[tk]={buildZone:null,addZone:null,tp1:null,tp2:null,tp3:null,buyBack:null,invalid:null,keySupport:null,keyResistance:null,catalysts:null,riskFactors:null,todayAdvice:null,orderSuggestion:null,lastChange:today()+" 新增部位初始化,手冊待三 AI 報告建立"};
+ Store.data.transactions.unshift({ts:today(),id,ticker:tk,side:"Buy",shares:sh,price:px,note:"新增部位建倉",realized:null});
+ const wi=Store.data.watchlist.findIndex(w=>w.ticker===tk);
+ if(wi>=0){Store.data.watchlist.splice(wi,1);Store.log(tk,"Watchlist","觀察中","轉為持股","買進成交,移入持股主檔");}
+ Store.log(tk,"新增部位("+A[1]+")","-",sh+" 股 @ "+px,"手動新增;手冊區間待三 AI 戰報建立");
+ Store.persist();const m=document.querySelector(".modal");if(m)m.remove();render();
+ toast(tk+" 已新增 "+sh+" 股。下一份戰報快照將自動含此部位,三 AI 會建立交易手冊");
+}
+
 function addWatch(){
  const t=(document.getElementById("wladd").value||"").trim().toUpperCase();if(!t)return;
  const d=Store.data;if(d.watchlist.some(w=>w.ticker===t))return toast("已存在");
- d.watchlist.push({ticker:t,name:"",market:/^[0-9]/.test(t)?"TW":"US",priority:null,score:null,confidence:null,expectedTime:null,catalyst:null,risk:null,expectedReturn:null});
+ d.watchlist.push({ticker:t,name:"",market:/^[0-9]/.test(t)?"TW":"US",priority:null,score:null,confidence:null,expectedTime:null,catalyst:null,risk:null,expectedReturn:null,entryZone:null,note:null,removeSuggest:null});
  Store.log(t,"Watchlist","-","新增","手動新增觀察標的");Store.persist();render();
 }
 function promptWatch(i,k){
@@ -735,16 +784,16 @@ function buildTemplate(type){
  const d=Store.data,def=FORMAT_DEFS.find(f=>f[0]===type),seen=new Set();
  const snap={fx_usdtwd:d.settings.fxUSDTWD,
   positions:d.positions.map(p=>({ticker:p.ticker,account:p.broker,market:p.market,shares:p.shares,avg_cost:p.avgCost,quote_ccy:p.quoteCurrency,current_price:p.currentPrice,type:p.positionType,priority:p.priority,status:p.status,health:p.healthScore})),
-  manual:{},watchlist:d.watchlist.map(w=>w.ticker)};
+  manual:{},watchlist:d.watchlist.map(w=>({ticker:w.ticker,market:w.market,priority:w.priority,score:w.score,confidence:w.confidence,expected_time:w.expectedTime,catalyst:w.catalyst,risk:w.risk,expected_return:w.expectedReturn,entry_zone:w.entryZone??null,remove_suggest:w.removeSuggest??null}))};
  d.positions.forEach(p=>{if(seen.has(p.ticker))return;seen.add(p.ticker);const m=d.manual[p.ticker];if(m)snap.manual[p.ticker]={build:m.buildZone,add:m.addZone,tp1:m.tp1,tp2:m.tp2,tp3:m.tp3,buy_back:m.buyBack,invalid:m.invalid};});
  const T="```";
  const schema={source:"ChatGPT | Claude | Gemini(填你自己)",report_type:type,date:"YYYY-MM-DD",fx_usdtwd:31.5,
   stocks:[{ticker:"MU",current_price:1050,action:"Hold",health_total:82,health_breakdown:{ai:90,institutional:80,earnings:85,valuation:70,technical:80,risk:75,trend:88},priority:"A+",confidence:4,reason:"一句話理由",risk:"一句話風險",today_advice:"不動 / 1120以上外幣帳戶賣1股",manual_updates:{tp1:"1150–1180 → 賣 1 股",key_support:"980",key_resistance:"1120"},scenario:{bull:{target:1400,prob:30,time:"2026Q4"},base:{target:1150,prob:50,time:"2026Q3"},bear:{target:880,prob:20,time:"2026Q3"}}}],
-  watchlist_updates:[{ticker:"NVDA",priority:"A",score:85,confidence:4,expected_time:"2026Q3",catalyst:"財報",risk:"估值",expected_return:"+15%"}],
+  watchlist_updates:[{ticker:"NVDA",status:"Keep|New|Remove",priority:"A",score:85,confidence:4,expected_time:"2026Q3",catalyst:"財報",risk:"估值",expected_return:"+15%",entry_zone:"165–172",note:"提名理由或距進場距離"}],
   major_events:[{tag:"HBM",desc:"事件描述",impact:["MU","2330"]}],graph_links:[["HBM","MU"]],
   metrics:{beta:1.3,sharpe:1.1,max_drawdown:"-18%"},validated:["判斷X已驗證"],invalidated:["判斷Y已失效"],
   today:{one_liner:"今日一句話",best_hold:"2330",best_add:"無",best_reduce:"KMEM",best_wait:"GLW",risk:"今日最大風險",opportunity:"今日最大機會",cash_plan:"資金計畫",warning:"警示"}};
- return "# DIOS "+def[1]+" Report — 標準產出指令(v3 資料交換格式)\n\n你是投資分析 AI(ChatGPT / Claude / Gemini 其中之一)。請依下方持股快照與最新市場資訊,產出「"+def[1]+"」報告。\n用途:"+def[2]+"\n\n【鐵律】\n1. 出場/加碼建議必須用實際股數並指明帳戶(如「LAES 外幣帳戶賣 15 股」),禁止百分比賣法。\n2. 建議必須附觸發條件與理由,禁止情緒性建議。\n3. 資料不足填 null,不可假設(Data Missing 原則)。\n4. 報告最後必附一個 "+T+"dios JSON 塊,格式 100% 依 Schema,DIOS 只解析此塊。\n5. action 只允許:Buy / Add / Hold / Reduce / Sell / Exit / Wait。\n6. 上半部 Markdown 自由撰寫給人看;JSON 塊是唯一機器讀取部分。\n\n【持股與手冊快照(含多帳戶)】\n"+JSON.stringify(snap)+"\n\n【輸出格式 — 報告末尾必附】\n"+T+"dios\n"+JSON.stringify(schema,null,1)+"\n"+T+"\n說明:沒變化/不知道的欄位可省略或填 null;stocks 只列有更新的標的。"+(type==="FLASH"?"Flash 可只含 source/report_type/date/major_events/stocks。":"");
+ return "# DIOS "+def[1]+" Report — 標準產出指令(v3 資料交換格式)\n\n你是投資分析 AI(ChatGPT / Claude / Gemini 其中之一)。請依下方持股快照與最新市場資訊,產出「"+def[1]+"」報告。\n用途:"+def[2]+"\n\n【鐵律】\n1. 出場/加碼建議必須用實際股數並指明帳戶(如「LAES 外幣帳戶賣 15 股」),禁止百分比賣法。\n2. 建議必須附觸發條件與理由,禁止情緒性建議。\n3. 資料不足填 null,不可假設(Data Missing 原則)。\n4. 報告最後必附一個 "+T+"dios JSON 塊,格式 100% 依 Schema,DIOS 只解析此塊。\n5. action 只允許:Buy / Add / Hold / Reduce / Sell / Exit / Wait。\n6. 上半部 Markdown 自由撰寫給人看;JSON 塊是唯一機器讀取部分。"+(type==="FLASH"?"":"\n7. Watchlist 全評估(必做):watchlist_updates 必須涵蓋快照 watchlist 中的每一檔,各檔附 score、催化、風險、entry_zone(進場觸發區間,含價位)與 status(Keep/Remove);認為不再值得觀察者 status 填 Remove 並於 risk 說明理由(僅為建議,系統不會自動刪除,由使用者裁決)。\n8. 主動選股(必做):依當日市場搜尋結果,主動提名 0–3 檔值得觀察的優質新標的(status:New,附提名理由 note 與 entry_zone);提名須與現有持股/觀察清單互補(產業、題材或風險分散),寧缺勿濫,禁止湊數;若無值得提名者明說「本日無新提名」。")+"\n\n【持股與手冊快照(含多帳戶)】\n"+JSON.stringify(snap)+"\n\n【輸出格式 — 報告末尾必附】\n"+T+"dios\n"+JSON.stringify(schema,null,1)+"\n"+T+"\n說明:沒變化/不知道的欄位可省略或填 null;stocks 只列有更新的標的。"+(type==="FLASH"?"Flash 可只含 source/report_type/date/major_events/stocks。":"");
 }
 function viewFormats(){
  return '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">'+FORMAT_DEFS.map(f=>'<button class="chip" style="'+(fmtType===f[0]?'border-color:var(--amber);color:var(--amber)':'')+'" onclick="fmtType=\''+f[0]+'\';render()">'+esc(f[1])+'</button>').join("")+'</div>'+
