@@ -82,7 +82,7 @@ h2{font-size:18px;margin:4px 0;display:flex;gap:8px;align-items:baseline;flex-wr
    規則:報價只更新市價不碰成本;成本變動只能來自交易紀錄(Append)或手動(會記 Log);
    每帳戶獨立股數/成本/已實現損益;同 ticker 跨帳戶自動合計+加權均價。 */
 
-const VERSION="3.1-S1", KEY="dios-data";
+const VERSION="3.2-V12", KEY="dios-data";
 const today=()=>new Date().toISOString().slice(0,10);
 const now=()=>new Date().toISOString().slice(0,16).replace("T"," ");
 const PRI={"A+":0,"A":1,"B":2,"B-":3,"C":4};
@@ -140,7 +140,7 @@ function freshData(){return {
   {ts:"2026-07-09",id:"5353959|TW|4958",ticker:"4958",side:"Sell",shares:33,price:595,note:"分批停利,保留40股;依賣出前均價578.82估已實現約+534 TWD",realized:533.94}
  ],
  watchlist:["NVDA","2454","2308","2882","AVGO","IONQ","SMH","6116"].map(t=>({ticker:t,name:"",market:/^[0-9]/.test(t)?"TW":"US",priority:null,score:null,confidence:null,expectedTime:null,catalyst:null,risk:null,expectedReturn:null})),
- aiReports:{},consensus:{},consensusHistory:[],todayBoard:null,scenarios:{},metrics:{},
+ adoptedPlans:[],aiReports:{},consensus:{},consensusHistory:[],todayBoard:null,scenarios:{},metrics:{},
  graph:[["HBM","MU"],["HBM","KMEM"],["DRAM","MU"],["AI Server","MU"],["AI Server","2330"],["AI Server","4958"],["CCL","4958"],["PCB","4958"],["CoWoS","2330"],["SOX","00662"],["SOX","00685L"],["台股大盤","0050"],["Quantum","LAES"],["SpaceX","SPCX"],["Foundry","GFS"],["Foundry","2330"],["光通訊","GLW"]],
  majorEvents:[],validation:[],quoteMeta:{lastTW:null,quoteDateTW:null,lastFX:null},
  decisionLog:[
@@ -164,7 +164,7 @@ function migrate(d){
   if(!p.priceUpdatedAt)p.priceUpdatedAt=null;
  });
  Object.keys(out.manual||{}).forEach(k=>{const m=out.manual[k];if(m&&m.todayAction!==undefined){m.todayAdvice=m.todayAdvice??m.todayAction;delete m.todayAction;}});
- ["watchlist","aiReports","consensus","consensusHistory","scenarios","metrics","graph","majorEvents","validation","decisionLog","transactions"].forEach(k=>{if(out[k]==null)out[k]=f[k]||[];});
+ ["watchlist","aiReports","consensus","consensusHistory","scenarios","metrics","graph","majorEvents","validation","decisionLog","transactions","adoptedPlans"].forEach(k=>{if(out[k]==null)out[k]=f[k]||[];});
  if(!out.quoteMeta)out.quoteMeta={lastTW:null,quoteDateTW:null,lastFX:null};
  return out;
 }
@@ -422,7 +422,13 @@ function viewPortfolio(){
 function viewManual(){
  const d=Store.data,seen=new Set();
  const ps=[...d.positions].sort((a,b)=>(PRI[a.priority]??9)-(PRI[b.priority]??9)).filter(p=>{if(seen.has(p.ticker))return false;seen.add(p.ticker);return true;});
- return ps.map(p=>{const m=d.manual[p.ticker];if(!m)return"";return '<button class="card" style="width:100%;text-align:left;color:var(--txt);font:inherit" onclick="open_(\''+p.id+'\')"><div style="display:flex;gap:8px;align-items:baseline"><span class="tk">'+p.ticker+'</span><span class="sub">'+esc(p.name)+'</span>'+(m.todayAdvice?'<span class="sub" style="color:var(--amber);margin-left:auto">今日:'+esc(m.todayAdvice)+'</span>':"")+'</div><div class="sub" style="margin-top:6px;line-height:1.8">建倉 '+esc(m.buildZone)+' · 加碼 '+esc(m.addZone)+'<br>停利1 '+esc(m.tp1)+'<br>回補 '+esc(m.buyBack)+'</div><div class="sub" style="margin-top:4px;color:var(--dimmer)">失效:'+esc(m.invalid)+'</div></button>';}).join("");
+ const plans=d.adoptedPlans||[];
+ const planCard='<div class="card warn"><div class="clabel">▍既定計畫(使用者已採納 · 隨快照送 AI 每次 prev_review 重評 維持/修改/取消)</div>'+
+  (plans.length?plans.map((a,i)=>'<div style="font-size:13px;padding:3px 0;border-bottom:1px solid var(--line)"><span class="tk">'+esc(a.ticker)+'</span> '+esc(a.plan)+' <span class="sub mono">採納 '+esc(a.adopted_on||"")+'</span> <button class="editv sub" onclick="delPlan('+i+')">已執行/移除</button></div>').join(""):'<div class="sub">目前無既定計畫。採納某 AI 的日期型執行計畫(如「7/13 賣出全部」)後,請在此登記,快照才會帶給三 AI 重評。</div>')+
+  '<button class="btn sec" style="margin-top:8px" onclick="addPlan()">＋登記既定計畫</button></div>';
+ return planCard+ps.map(p=>{const m=d.manual[p.ticker];if(!m)return"";
+ const nProps=Object.values(d.aiReports[p.ticker]||{}).filter(v=>v.manual).length;
+ const propChip=nProps?'<span class="sub" style="color:var(--amber)">◆'+nProps+'份提案待裁決</span>':"";return '<button class="card" style="width:100%;text-align:left;color:var(--txt);font:inherit" onclick="open_(\''+p.id+'\')"><div style="display:flex;gap:8px;align-items:baseline"><span class="tk">'+p.ticker+'</span><span class="sub">'+esc(p.name)+'</span>'+propChip+(m.todayAdvice?'<span class="sub" style="color:var(--amber);margin-left:auto">今日:'+esc(m.todayAdvice)+'</span>':"")+'</div><div class="sub" style="margin-top:6px;line-height:1.8">建倉 '+esc(m.buildZone)+' · 加碼 '+esc(m.addZone)+'<br>停利1 '+esc(m.tp1)+'<br>回補 '+esc(m.buyBack)+'</div><div class="sub" style="margin-top:4px;color:var(--dimmer)">失效:'+esc(m.invalid)+'</div></button>';}).join("");
 }
 
 function viewLog(){
@@ -450,7 +456,7 @@ function viewDetail(id){
   <div class="card"><div class="clabel">已實現損益</div><span class="mono ${plCls(p.realizedPL)}">${p.realizedPL!=null?(p.realizedPL>0?"+":"")+fmt(p.realizedPL,2):"—"}</span></div>
  </div>
  <div style="height:10px"></div>
- ${(function(){const rep=d.aiReports[p.ticker]||{};const cs=d.consensus[p.ticker];const keys=Object.keys(rep);if(!keys.length)return"";return '<div class="card"><div class="clabel">▍AI 交叉驗證('+p.ticker+')</div>'+keys.map(s=>{const v=rep[s];return '<div style="font-size:13px;padding:3px 0;border-bottom:1px solid var(--line)"><span class="mono" style="color:var(--amber)">'+s+'</span> <span class="mono" style="color:'+actColor(v.action)+'">'+esc(v.action||"—")+'</span>'+(v.health!=null?' <span class="mono">健康'+v.health+'</span>':'')+(v.confidence?' <span style="color:var(--amber)">'+"★".repeat(v.confidence)+'</span>':'')+'<div class="sub">'+esc(v.reason||"")+(v.risk?' · 風險:'+esc(v.risk):'')+' ('+esc(v.date||"")+')</div></div>';}).join("")+(cs?'<div class="sub" style="margin-top:6px">共識:'+(cs.humanReview?'⚠ Human Review':esc(cs.final))+' '+cs.pct+'%'+(cs.disagreement?' · 分歧:'+esc(cs.disagreement):'')+'</div>':'')+'</div>';})()}
+ ${renderAiCard(p)}
  <div class="card"><div class="clabel">▍交易(Append,成本自動推算)</div>
   <button class="btn sec" onclick="promptTx('${id}')">＋記錄交易</button>
   ${txs.length?'<div style="margin-top:8px">'+txs.map(t=>'<div class="sub" style="padding:2px 0"><span class="mono">'+t.ts+'</span> <span style="color:'+(t.side==="Buy"?"var(--up)":"var(--down)")+'">'+t.side+'</span> '+t.shares+' 股 @ '+t.price+(t.realized!=null?' · 已實現 <span class="'+plCls(t.realized)+'">'+(t.realized>0?"+":"")+fmt(t.realized,2)+'</span>':"")+(t.note?' · '+esc(t.note):"")+'</div>').join("")+'</div>':'<div class="sub" style="margin-top:6px">此帳戶尚無交易紀錄。</div>'}
@@ -470,6 +476,64 @@ function viewDetail(id){
   ${F("今日建議",eTxt("todayAdvice",m.todayAdvice,1))}${F("委託建議",eTxt("orderSuggestion",m.orderSuggestion,1))}
   <div class="sub mono" style="margin-top:6px">Last Change:${esc(m.lastChange||"")}</div>
  </div>`;
+}
+
+/* ---- v1.2:三 AI 手冊提案比對與採納(反錨定:共用手冊只由使用者裁決變更) ---- */
+const PROP_FIELDS=[["buildZone","建倉"],["addZone","加碼"],["tp1","停利1"],["tp2","停利2"],["tp3","停利3"],["buyBack","回補"],["keySupport","支撐"],["keyResistance","壓力"],["invalid","失效"],["catalysts","催化"],["orderSuggestion","掛單"]];
+function renderAiCard(p){
+ const d=Store.data,rep=d.aiReports[p.ticker]||{},cs=d.consensus[p.ticker],keys=Object.keys(rep);
+ if(!keys.length)return"";
+ let h='<div class="card"><div class="clabel">▍AI 交叉驗證('+p.ticker+')</div>';
+ h+=keys.map(s=>{const v=rep[s];
+  return '<div style="font-size:13px;padding:3px 0;border-bottom:1px solid var(--line)"><span class="mono" style="color:var(--amber)">'+s+'</span> <span class="mono" style="color:'+actColor(v.action)+'">'+esc(v.action||"—")+'</span>'+(v.health!=null?' <span class="mono">健康'+v.health+'</span>':'')+(v.confidence?' <span style="color:var(--amber)">'+"★".repeat(v.confidence)+'</span>':'')+(v.priceTime?' <span class="sub mono">'+esc(v.priceTime)+'</span>':'')+
+  '<div class="sub">'+esc(v.reason||"")+(v.risk?' · 風險:'+esc(v.risk):'')+' ('+esc(v.date||"")+')</div>'+
+  (v.prevReview&&v.prevReview.verdict?'<div class="sub" style="color:'+(v.prevReview.verdict==="維持"?"var(--dim)":"var(--amber)")+'">prev_review:'+esc(v.prevReview.verdict)+(v.prevReview.note?' — '+esc(v.prevReview.note):'')+'</div>':'')+
+  (v.topRisks&&v.topRisks.length?'<div class="sub">三大風險:'+v.topRisks.map(esc).join(" / ")+'</div>':'')+
+  (v.notIncluded&&v.notIncluded.length?'<div class="sub" style="color:var(--dimmer)">未納入:'+v.notIncluded.map(esc).join("<br>未納入:")+'</div>':'')+
+  '</div>';}).join("");
+ if(cs)h+='<div class="sub" style="margin-top:6px">共識:'+(cs.humanReview?'⚠ Human Review':esc(cs.final))+' '+cs.pct+'%'+(cs.disagreement?' · 分歧:'+esc(cs.disagreement):'')+'</div>';
+ h+='</div>';
+ // 提案比對表
+ const props=keys.filter(s=>rep[s].manual);
+ if(props.length){
+  const m=d.manual[p.ticker]||{};
+  h+='<div class="card warn"><div class="clabel">▍手冊提案比對('+props.length+' 份,現行手冊不會被自動覆蓋)</div>';
+  h+='<div class="twrap"><table style="min-width:640px;font-size:11px"><thead><tr><th>欄位</th><th>現行手冊</th>'+props.map(s=>'<th>'+esc(s)+'('+esc(rep[s].date||"")+')</th>').join("")+'</tr></thead><tbody>';
+  PROP_FIELDS.forEach(([f,label])=>{
+   const vals=props.map(s=>rep[s].manual[f]);
+   if(m[f]==null&&vals.every(v=>v==null))return;
+   const uniq=new Set(vals.filter(v=>v!=null).map(String));
+   const diverge=uniq.size>1;
+   h+='<tr><td class="sub">'+label+(diverge?' <span style="color:var(--amber)">◆</span>':'')+'</td><td class="sub" style="max-width:150px">'+(m[f]!=null?esc(m[f]):"—")+'</td>'+props.map(s=>{const v=rep[s].manual[f];const changed=v!=null&&String(v)!==String(m[f]);return '<td style="max-width:170px;'+(changed?'color:var(--amber)':'color:var(--dim)')+'">'+(v!=null?esc(v):"—")+'</td>';}).join("")+'</tr>';
+  });
+  h+='</tbody></table></div>';
+  h+='<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">'+props.map(s=>'<button class="btn sec" onclick="adoptProposal(\''+p.ticker+'\',\''+s+'\')">採納 '+esc(s)+' 版</button>').join("")+'</div>';
+  h+='<div class="sub" style="margin-top:6px">◆=三 AI 分歧欄位、橘字=與現行手冊不同。採納後寫入決策紀錄可回溯;也可只參考提案、手動點編現行手冊個別欄位。</div></div>';
+ }
+ return h;
+}
+function adoptProposal(tk,src2){
+ const d=Store.data,rep=d.aiReports[tk];
+ if(!rep||!rep[src2]||!rep[src2].manual)return toast("無此提案");
+ if(!confirm("採納 "+src2+" 的 "+tk+" 完整手冊提案?將覆蓋現行手冊(決策紀錄可回溯)"))return;
+ d.manual[tk]=d.manual[tk]||{};
+ const mm=d.manual[tk],prop=rep[src2].manual;let n=0;
+ Object.entries(prop).forEach(([f,v])=>{if(String(mm[f])!==String(v)){Store.log(tk,"手冊/"+f,mm[f],v,"使用者採納 "+src2+" 提案");mm[f]=v;n++;}});
+ mm.lastChange=today()+" 使用者採納 "+src2+" 完整提案("+n+" 欄變更)";
+ Store.persist();render();toast(tk+" 手冊已更新為 "+src2+" 版本("+n+" 欄變更)");
+}
+/* ---- v1.2:既定計畫(使用者已採納,隨快照送出、AI 每次 prev_review 重評) ---- */
+function addPlan(){
+ const tk=(prompt("標的代碼(如 00407A)")||"").trim().toUpperCase();if(!tk)return;
+ const plan=(prompt("計畫內容(含日期/帳戶/實際股數/觸發條件)")||"").trim();if(!plan)return;
+ Store.data.adoptedPlans.push({ticker:tk,plan,adopted_on:today()});
+ Store.log(tk,"既定計畫","-",plan,"使用者採納");Store.persist();render();
+}
+function delPlan(i){
+ const a=Store.data.adoptedPlans[i];if(!a)return;
+ if(!confirm("移除既定計畫:"+a.ticker+"「"+a.plan+"」?"))return;
+ Store.log(a.ticker,"既定計畫",a.plan,"移除/已執行","使用者裁決");
+ Store.data.adoptedPlans.splice(i,1);Store.persist();render();
 }
 
 function promptTx(id){
@@ -578,9 +642,10 @@ function applyImport(reports){
    if(rows.length){
     if(s.current_price!=null)rows.forEach(p=>{if(s.current_price!==p.currentPrice){Store.log(tk,"現價",p.currentPrice,s.current_price,tag);p.currentPrice=s.current_price;p.lastUpdated=r.date||today();}});
     d.aiReports[tk]=d.aiReports[tk]||{};
-    d.aiReports[tk][src]={action:s.action??null,health:s.health_total??null,healthBreakdown:s.health_breakdown??null,priority:s.priority??null,confidence:s.confidence??null,reason:s.reason??null,risk:s.risk??null,date:r.date||today()};
-    if(s.manual_updates&&d.manual[tk])Object.entries(s.manual_updates).forEach(([k,v])=>{const f=MANUAL_MAP[k];if(!f)return;const mm=d.manual[tk];if(String(mm[f])===String(v))return;Store.log(tk,"手冊/"+f,mm[f],v,tag+":"+(s.reason||"報告更新"));mm[f]=v;mm.lastChange=(r.date||today())+" "+src+" 報告更新";});
-    if(s.today_advice&&d.manual[tk])d.manual[tk].todayAdvice=s.today_advice;
+    d.aiReports[tk][src]={action:s.action??null,health:s.health_total??null,healthBreakdown:s.health_breakdown??null,priority:s.priority??null,confidence:s.confidence??null,reason:s.reason??null,risk:s.risk??null,priceTime:s.price_time??null,topRisks:s.top_risks??null,todayAdvice:s.today_advice??null,prevReview:s.prev_review??null,notIncluded:s.not_included??null,manual:null,date:r.date||today()};
+    /* v1.2 反錨定:手冊提案按來源存檔,禁止自動覆蓋共用手冊;由使用者在個股頁比對後「採納」 */
+    if(s.manual_updates){const prop={};Object.entries(s.manual_updates).forEach(([k,v])=>{const f=MANUAL_MAP[k];if(f&&v!=null)prop[f]=v;});if(Object.keys(prop).length){d.aiReports[tk][src].manual=prop;Store.log(tk,"手冊提案("+src+")","-",Object.keys(prop).length+" 欄完整提案已存檔,待人工比對採納",tag);}}
+    if(s.prev_review&&s.prev_review.verdict&&s.prev_review.verdict!=="維持")Store.log(tk,"prev_review("+src+")","前次計畫",s.prev_review.verdict+(s.prev_review.note?":"+s.prev_review.note:""),tag);
     if(s.scenario){d.scenarios[tk]=d.scenarios[tk]||{};d.scenarios[tk][src]=s.scenario;}
    }
   });
@@ -629,7 +694,9 @@ function applyImport(reports){
   [...d.positions].sort((a,b)=>(PRI[a.priority]??9)-(PRI[b.priority]??9)).forEach(p=>{
    if(seen.has(p.ticker))return;seen.add(p.ticker);
    const c=d.consensus[p.ticker];if(!c)return;
-   const adv=d.manual[p.ticker]?d.manual[p.ticker].todayAdvice:null;
+   const repA=d.aiReports[p.ticker]||{};
+   const advArr=[...new Set(Object.entries(repA).filter(([,v])=>v.todayAdvice&&v.todayAdvice!=="不動").map(([s2,v])=>s2+": "+v.todayAdvice))];
+   const adv=advArr.length?advArr.join(" ｜ "):(d.manual[p.ticker]?d.manual[p.ticker].todayAdvice:null);
    if(c.humanReview)lines.push({t:p.ticker,txt:"⚠ 三 AI 分歧(共識 "+c.pct+"%)→ 需人工判斷。"+c.disagreement});
    else if(c.final&&c.final!=="Hold")lines.push({t:p.ticker,txt:c.final+"(共識 "+c.pct+"%)"+(adv?" — "+adv:"")});
    else if(adv&&adv!=="Hold")lines.push({t:p.ticker,txt:adv});
@@ -649,7 +716,7 @@ function viewImport(){
  '<textarea id="imptext" rows="9" style="font-family:ui-monospace,monospace;font-size:11px" oninput="importText=this.value" placeholder="貼上報告全文…">'+esc(importText)+'</textarea>'+
  '<div style="display:flex;gap:8px;margin-top:8px"><button class="btn sec" onclick="parseImport()">① 解析預覽</button><button class="btn" '+(pv&&pv.reports.length?'':'disabled')+' onclick="confirmImport()">② 確認匯入 → 全模組更新</button></div></div>'+
  (pv?'<div class="card'+(pv.errs.length?' warn':'')+'"><div class="clabel">▍解析結果</div>'+pv.errs.map(e=>'<div style="color:var(--rose);font-size:13px">✗ '+esc(e)+'</div>').join("")+pv.reports.map(r=>'<div style="font-size:13px;padding:3px 0;border-bottom:1px solid var(--line)"><span class="mono" style="color:var(--amber)">'+esc(r.source)+'</span> · '+esc(r.report_type)+' · '+esc(r.date||"無日期")+' · 個股 '+((r.stocks||[]).length)+' 檔'+(r.fx_usdtwd?' · 匯率 '+r.fx_usdtwd:'')+(r.major_events&&r.major_events.length?' · 事件 '+r.major_events.length:'')+'</div>').join("")+'</div>':'')+
- '<div class="card"><div class="clabel">▍每日流程</div><div class="sub" style="line-height:2">1. Formats 分頁複製指令(含持股快照)<br>2. 貼給 ChatGPT / Claude / Gemini 取得報告<br>3. 三份全文貼回本頁 → 解析 → 匯入<br>4. Consensus → Dashboard → Manual → Log → Watchlist → Graph → Health → Today\'s Action 一次完成</div></div>';
+ '<div class="card"><div class="clabel">▍每日流程</div><div class="sub" style="line-height:2">1. Formats 分頁複製指令(含持股快照)<br>2. 貼給 ChatGPT / Claude / Gemini 取得報告<br>3. 三份全文貼回本頁 → 解析 → 匯入<br>4. Consensus → Dashboard → Watchlist → Today\'s Action 自動更新<br>5. 個股頁「手冊提案比對」裁決三 AI 分歧 → 採納後成為現行手冊(v1.2 起手冊不再被報告自動覆蓋)</div></div>';
 }
 function parseImport(){importText=document.getElementById("imptext").value;importPreview=extractReports(importText);render();}
 function confirmImport(){if(!importPreview||!importPreview.reports.length)return;applyImport(importPreview.reports);importText="";importPreview=null;tab="dashboard";render();toast("匯入完成:全模組已更新");}
@@ -782,23 +849,42 @@ const FORMAT_DEFS=[["US_POSTMARKET","美股盤後 07:30","檢查美股收盤,評
 let fmtType="US_POSTMARKET";
 function buildTemplate(type){
  const d=Store.data,def=FORMAT_DEFS.find(f=>f[0]===type),seen=new Set();
- const snap={fx_usdtwd:d.settings.fxUSDTWD,
-  positions:d.positions.map(p=>({ticker:p.ticker,account:p.broker,market:p.market,shares:p.shares,avg_cost:p.avgCost,quote_ccy:p.quoteCurrency,current_price:p.currentPrice,type:p.positionType,priority:p.priority,status:p.status,health:p.healthScore})),
-  manual:{},watchlist:d.watchlist.map(w=>({ticker:w.ticker,market:w.market,priority:w.priority,score:w.score,confidence:w.confidence,expected_time:w.expectedTime,catalyst:w.catalyst,risk:w.risk,expected_return:w.expectedReturn,entry_zone:w.entryZone??null,remove_suggest:w.removeSuggest??null}))};
- d.positions.forEach(p=>{if(seen.has(p.ticker))return;seen.add(p.ticker);const m=d.manual[p.ticker];if(m)snap.manual[p.ticker]={build:m.buildZone,add:m.addZone,tp1:m.tp1,tp2:m.tp2,tp3:m.tp3,buy_back:m.buyBack,invalid:m.invalid};});
+ const isFlash=type==="FLASH";
+ const fullDim=(type==="WEEKLY_STRATEGY"||type==="MANUAL_UPDATE"||type==="EVENT_UPDATE");
+ /* ---- 快照 v2:facts(對帳事實)與 prev_conclusions(前次結論)物理分離,反錨定 ---- */
+ const facts={generated_at:now(),fx_usdtwd:d.settings.fxUSDTWD,cash_twd:d.settings.cashTWD,cash_usd:d.settings.cashUSD,
+  positions:d.positions.map(p=>({ticker:p.ticker,account:p.broker,market:p.market,quote_ccy:p.quoteCurrency,shares:p.shares,avg_cost:p.avgCost,last_price:p.currentPrice,last_price_time:p.priceUpdatedAt||p.lastUpdated})),
+  watchlist_tickers:d.watchlist.map(w=>w.ticker)};
+ const prev={note:"以下全部為前次結論(前次AI建議或共識),僅供 validated/invalidated 與 prev_review 比對;禁止沿用其價位、分數、狀態作為本次建議,本次所有數字須由當日搜尋獨立推導",prev_manual:{},prev_status:{},prev_watchlist:{},
+  adopted_plans:(d.adoptedPlans||[]).map(a=>({ticker:a.ticker,plan:a.plan,adopted_on:a.adopted_on,note:"使用者已採納,仍須每次以 prev_review 重新評估 維持/修改/取消"}))};
+ d.positions.forEach(p=>{if(seen.has(p.ticker))return;seen.add(p.ticker);
+  const m=d.manual[p.ticker];
+  if(m)prev.prev_manual[p.ticker]={build:m.buildZone,add:m.addZone,tp1:m.tp1,tp2:m.tp2,tp3:m.tp3,buy_back:m.buyBack,invalid:m.invalid,key_support:m.keySupport,key_resistance:m.keyResistance};
+  prev.prev_status[p.ticker]={status:p.status,priority:p.priority,health:p.healthScore,type:p.positionType};});
+ d.watchlist.forEach(w=>{prev.prev_watchlist[w.ticker]={market:w.market,priority:w.priority,score:w.score,confidence:w.confidence,expected_time:w.expectedTime,catalyst:w.catalyst,risk:w.risk,expected_return:w.expectedReturn,entry_zone:w.entryZone??null,remove_suggest:w.removeSuggest??null};});
+ const snap={snapshot_version:2,facts:facts,prev_conclusions:prev};
  const T="```";
+ const IRON=isFlash?
+"【鐵律(FLASH 精簡版)】\n1. 出場/加碼建議必須用實際股數並指明帳戶(如「LAES 外幣帳戶 G552118 賣 15 股」),禁止百分比與模糊股數。\n2. 每個建議必須附觸發價位與理由,禁止情緒性建議。\n3. 研究型資料完整原則:先主動搜尋官方與可信市場來源;仍無資料才省略該欄位(禁止填 null/0/推算值),並在 not_included 記錄「項目｜搜尋來源類型｜原因｜對結論影響」。\n4. 報告最後必附一個 "+T+"dios JSON 塊,DIOS 只解析此塊。\n5. action 只允許:Buy / Add / Hold / Reduce / Sell / Exit / Wait。\n6. 反錨定:快照 prev_conclusions 全部為前次結論,禁止沿用其價位、分數、狀態;本次數字須由當日搜尋獨立推導。\n7. 只分析事件相關標的,速度優先;免除 watchlist 全評估、主動選股與完整手冊提案。"
+:
+"【鐵律(v1.2)】\n1. 出場/加碼建議必須用實際股數並指明帳戶(如「LAES 外幣帳戶 G552118 賣 15 股」),禁止百分比與模糊股數(賣出一半、適量加碼等)。\n2. 每個建議必須附觸發價位與理由,必要時加收盤/成交量/時間條件,禁止情緒性建議。\n3. 研究型資料完整原則:使用者未提供資料不等於資料不存在。先主動搜尋官方來源、可信市場來源及替代指標;仍無資料才省略該欄位(JSON 直接省略、禁止填 null/0/猜測/推算值),並在該股 not_included 記錄「項目｜搜尋過的來源類型｜原因｜對結論的實質影響」。不得因細項缺失省略整檔股票分析。\n4. 報告最後必附一個 "+T+"dios JSON 塊,格式 100% 依 v1.2 Schema,DIOS 只解析此塊;上半部 Markdown 自由撰寫給人看。\n5. action 只允許:Buy / Add / Hold / Reduce / Sell / Exit / Wait。\n6. 反錨定(核心):快照分兩區——facts 為對帳事實(唯一真相,不得質疑);prev_conclusions(prev_manual/prev_status/prev_watchlist/adopted_plans)為前次結論,只能用於 validated/invalidated 與 prev_review 比對,【禁止】沿用、微調或照抄其價位、分數、狀態作為本次建議。本次所有數字須由當日搜尋與獨立分析重新推導;結論與前次相同是允許的,但理由必須是當日證據。\n7. prev_review 必填:對每檔持股的前次手冊與 adopted_plans 中的既定計畫,以最新狀況重新評估並給出 維持/修改/取消 裁定與理由(既定計畫不豁免),最終由使用者裁決。\n8. 完整手冊提案制:每檔持股必交完整 manual_updates 一套(build_zone/add_zone/tp1/tp2/tp3/buy_back/invalid,建議另附 key_support/key_resistance/catalysts/order_suggestion),不適用的欄位寫「不設定:理由」,禁止增量更新與留空。各 AI 各交各的版本,分歧由 DIOS 網頁統籌、不由 AI 預先消除。\n9. Watchlist 全評估:watchlist_updates 涵蓋快照 watchlist_tickers 每一檔,附當日推導的 score、催化、風險、entry_zone(進場觸發區間含價位)與 status(Keep/Remove;Remove 理由寫在 risk,僅為建議由使用者裁決)。score 與 entry_zone 不可沿用 prev_watchlist 舊值。\n10. 主動選股:依當日市場搜尋提名 0–3 檔與現有持股/觀察清單互補的優質新標的(status:New,附 note 與 entry_zone),寧缺勿濫、禁止湊數;無提名則明說「本日無新提名」。\n11. 研究深度:"+(fullDim?"本報告採【全維度】:每檔(受影響)標的完成十五節全套研究——多週期K線、全套均線、K線型態、VOL、FRVP、RSI、MACD、KD/J、BIAS、布林通道、支撐壓力、籌碼(台股三大法人/分點/融資券/借券/集保;美股13F/Short Interest/選擇權/大宗替代)、股本稀釋、基本面估值、產業事件、跨市場驗證、風險盲點、踏空風險、情境、交易指令。":"本報告採【核心包】:每檔持股必跑(無變化也不得省略)——最新價量漲跌、日線MA5/10/20/60排列、當日K線型態與缺口、VOL量價關係(對5/10/20日均量)、KD與J值、MACD(DIF/Signal/柱狀體/零軸)、RSI5/RSI10、BIAS5/10/20(比對該股歷史乖離)、布林通道(中軌/±2σ/開口擠壓/現價位置)、支撐壓力、籌碼日更(台股:三大法人+融資券+借券;美股:Short Interest/大宗/評級變化)、當日事件催化、三大風險、情境、交易指令。")+"禁止因 RSI/KD/MACD/BIAS 同時偏多而重複加分(同源動能只計一次)。\n12. 同時評估下跌風險與踏空風險(現價買進 vs 等待的期望值、突破追價條件),禁止機械式把現價下修 5–15% 當進場價。\n13. 產報告前必先上網搜尋當下實際行情/新聞/法人動向,禁止憑訓練資料編造報價;每筆報價註明日期與屬性(收盤/盤中/凍結),休市日標明「價格凍結於某日收盤」。";
+ const stockEx={ticker:"MU",current_price:1050,price_time:"YYYY-MM-DD 收盤|盤中|凍結",action:"Hold",health_total:82,health_breakdown:{ai:90,institutional:80,earnings:85,valuation:70,technical:80,risk:75,trend:88},priority:"A+",confidence:4,reason:"一句話核心理由(當日證據)",risk:"一句話主要風險",top_risks:["風險1","風險2","風險3"],today_advice:"不動 / 1120以上台幣複委託L607568賣1股",
+  manual_updates:{build_zone:"900–960(依當日分析推導)",add_zone:"850–900",tp1:"1150–1180 → 台幣複委託L607568賣1股",tp2:"1250–1300 → 賣1股",tp3:"不設定:理由",buy_back:"1000 / 950",invalid:"失效條件",key_support:"980",key_resistance:"1120",catalysts:"催化事件與日期",order_suggestion:"無需掛單"},
+  prev_review:{verdict:"維持|修改|取消",note:"對前次手冊/既定計畫的裁定理由;價位調整寫新舊對照"},
+  scenario:{bull:{target:1400,prob:30,time:"2026Q4",trigger:"觸發條件",shares:"賣1股"},base:{target:1150,prob:50,time:"2026Q3",range:"980–1150",shares:"續抱"},bear:{target:880,prob:20,time:"2026Q3",invalid:"失效條件",shares:"跌破980減1股"}},
+  not_included:["項目｜搜尋過的來源類型｜原因｜對結論的實質影響"]};
  const schema={source:"ChatGPT | Claude | Gemini(填你自己)",report_type:type,date:"YYYY-MM-DD",fx_usdtwd:31.5,
-  stocks:[{ticker:"MU",current_price:1050,action:"Hold",health_total:82,health_breakdown:{ai:90,institutional:80,earnings:85,valuation:70,technical:80,risk:75,trend:88},priority:"A+",confidence:4,reason:"一句話理由",risk:"一句話風險",today_advice:"不動 / 1120以上外幣帳戶賣1股",manual_updates:{tp1:"1150–1180 → 賣 1 股",key_support:"980",key_resistance:"1120"},scenario:{bull:{target:1400,prob:30,time:"2026Q4"},base:{target:1150,prob:50,time:"2026Q3"},bear:{target:880,prob:20,time:"2026Q3"}}}],
-  watchlist_updates:[{ticker:"NVDA",status:"Keep|New|Remove",priority:"A",score:85,confidence:4,expected_time:"2026Q3",catalyst:"財報",risk:"估值",expected_return:"+15%",entry_zone:"165–172",note:"提名理由或距進場距離"}],
+  stocks:[stockEx],
+  watchlist_updates:[{ticker:"NVDA",status:"Keep|New|Remove",priority:"A",score:85,confidence:4,expected_time:"2026Q3",catalyst:"財報",risk:"估值(Remove 時理由寫此)",expected_return:"+15%",entry_zone:"165–172(當日推導)",note:"提名理由或距進場距離"}],
   major_events:[{tag:"HBM",desc:"事件描述",impact:["MU","2330"]}],graph_links:[["HBM","MU"]],
-  metrics:{beta:1.3,sharpe:1.1,max_drawdown:"-18%"},validated:["判斷X已驗證"],invalidated:["判斷Y已失效"],
+  metrics:{beta:1.3,sharpe:1.1,max_drawdown:"-18%"},validated:["前次判斷X已驗證"],invalidated:["前次判斷Y已失效"],
   today:{one_liner:"今日一句話",best_hold:"2330",best_add:"無",best_reduce:"KMEM",best_wait:"GLW",risk:"今日最大風險",opportunity:"今日最大機會",cash_plan:"資金計畫",warning:"警示"}};
- return "# DIOS "+def[1]+" Report — 標準產出指令(v3 資料交換格式)\n\n你是投資分析 AI(ChatGPT / Claude / Gemini 其中之一)。請依下方持股快照與最新市場資訊,產出「"+def[1]+"」報告。\n用途:"+def[2]+"\n\n【鐵律】\n1. 出場/加碼建議必須用實際股數並指明帳戶(如「LAES 外幣帳戶賣 15 股」),禁止百分比賣法。\n2. 建議必須附觸發條件與理由,禁止情緒性建議。\n3. 資料不足填 null,不可假設(Data Missing 原則)。\n4. 報告最後必附一個 "+T+"dios JSON 塊,格式 100% 依 Schema,DIOS 只解析此塊。\n5. action 只允許:Buy / Add / Hold / Reduce / Sell / Exit / Wait。\n6. 上半部 Markdown 自由撰寫給人看;JSON 塊是唯一機器讀取部分。"+(type==="FLASH"?"":"\n7. Watchlist 全評估(必做):watchlist_updates 必須涵蓋快照 watchlist 中的每一檔,各檔附 score、催化、風險、entry_zone(進場觸發區間,含價位)與 status(Keep/Remove);認為不再值得觀察者 status 填 Remove 並於 risk 說明理由(僅為建議,系統不會自動刪除,由使用者裁決)。\n8. 主動選股(必做):依當日市場搜尋結果,主動提名 0–3 檔值得觀察的優質新標的(status:New,附提名理由 note 與 entry_zone);提名須與現有持股/觀察清單互補(產業、題材或風險分散),寧缺勿濫,禁止湊數;若無值得提名者明說「本日無新提名」。")+"\n\n【持股與手冊快照(含多帳戶)】\n"+JSON.stringify(snap)+"\n\n【輸出格式 — 報告末尾必附】\n"+T+"dios\n"+JSON.stringify(schema,null,1)+"\n"+T+"\n說明:沒變化/不知道的欄位可省略或填 null;stocks 只列有更新的標的。"+(type==="FLASH"?"Flash 可只含 source/report_type/date/major_events/stocks。":"");
+ return "# DIOS "+def[1]+" Report — 標準產出指令(v1.2 資料交換格式)\n\n你是投資分析 AI(ChatGPT / Claude / Gemini 其中之一),是三票獨立判斷中的一票。請依下方快照與當日最新搜尋結果,獨立產出「"+def[1]+"」報告;不迎合、不猜測其他 AI 立場,分歧由 DIOS 網頁統籌。\n用途:"+def[2]+"\n\n"+IRON+"\n\n【快照 v2(facts=對帳事實 · prev_conclusions=前次結論僅供比對)】\n"+JSON.stringify(snap)+"\n\n【輸出格式 — 報告末尾必附】\n"+T+"dios\n"+JSON.stringify(schema,null,1)+"\n"+T+"\n說明:"+(isFlash?"FLASH 可只含 source/report_type/date/major_events 與事件相關 stocks 部分欄位;":"stocks 必須涵蓋 facts.positions 全部持股(判斷無變化也不得省略);watchlist_updates 必須涵蓋全部 watchlist_tickers;")+"經完整搜尋仍無資料的欄位【直接省略】並列入該股 not_included,禁止填 null 或 0;prev_review"+(isFlash?"可省略":"每檔必填")+";health_breakdown 每項須有當日依據。";
 }
 function viewFormats(){
  return '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">'+FORMAT_DEFS.map(f=>'<button class="chip" style="'+(fmtType===f[0]?'border-color:var(--amber);color:var(--amber)':'')+'" onclick="fmtType=\''+f[0]+'\';render()">'+esc(f[1])+'</button>').join("")+'</div>'+
  '<div class="card"><div class="clabel">▍標準指令(含即時持股快照,直接複製貼給任一 AI)</div><button class="btn" onclick="copyTpl()">一鍵複製</button><pre style="white-space:pre-wrap;font-size:11px;color:var(--dim);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;max-height:380px;overflow-y:auto;margin-top:8px">'+esc(buildTemplate(fmtType))+'</pre></div>'+
- '<div class="sub">此為 DIOS 唯一資料交換格式:上半 Markdown 給人看,底部 dios JSON 給機器解析。任何 AI 產出、任何 AI 可驗證。</div>';
+ '<div class="sub">v1.2:快照分 facts(對帳事實)與 prev_conclusions(前次結論,AI 禁止沿用)兩區;三 AI 各自獨立推導完整手冊提案,匯入後在個股頁比對採納。既定計畫請先到 Manual 頁登記,才會隨快照送出重評。</div>';
 }
 function copyTpl(){navigator.clipboard.writeText(buildTemplate(fmtType)).then(()=>toast("已複製,可貼給 ChatGPT / Claude / Gemini"));}
 
