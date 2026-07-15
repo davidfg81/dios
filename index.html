@@ -82,7 +82,7 @@ h2{font-size:18px;margin:4px 0;display:flex;gap:8px;align-items:baseline;flex-wr
    規則:報價只更新市價不碰成本;成本變動只能來自交易紀錄(Append)或手動(會記 Log);
    每帳戶獨立股數/成本/已實現損益;同 ticker 跨帳戶自動合計+加權均價。 */
 
-const VERSION="3.3-V13", KEY="dios-data";
+const VERSION="3.3-V14", KEY="dios-data", COST_SCHEMA=2; // V14:成本基礎唯一資料源(totalCostFixed 一律報價幣別原始精度,avgCost 由其推導)
 const today=()=>new Date().toISOString().slice(0,10);
 const now=()=>new Date().toISOString().slice(0,16).replace("T"," ");
 const PRI={"A+":0,"A":1,"B":2,"B-":3,"C":4};
@@ -160,11 +160,11 @@ function seedPositions(){return [
  POS({acctId:"5353959",acctName:"台股現股 5353959",market:"TW",ticker:"2472",name:"立隆電",shares:10,avg:345,cost:3451,price:343,quoteCcy:"TWD",valCcy:"TWD",type:"Tactical",sec:"被動元件",theme:["被動元件","AI Server","電容"],pri:"B",conf:3,st:"Hold",notes:"07/13 新買進,手冊待三 AI 全維度建立"}),
  POS({acctId:"5353959",acctName:"台股現股 5353959",market:"TW",ticker:"4958",name:"臻鼎-KY",shares:20,avg:561.2,cost:11228,price:646,quoteCcy:"TWD",valCcy:"TWD",type:"Core",sec:"PCB/CCL",theme:["PCB","CCL","AI Server","Supply Chain"],pri:"A",conf:4,st:"Take Profit",realized:1931.94,notes:"07/10 賣33股@595、07/13 賣20股@634,保留20股"}),
  POS({acctId:"5353959",acctName:"台股現股 5353959",market:"TW",ticker:"6213",name:"聯茂",shares:20,avg:368.25,cost:7367,price:359.5,quoteCcy:"TWD",valCcy:"TWD",type:"Tactical",sec:"PCB/CCL",theme:["CCL","AI Server","PCB"],pri:"B",conf:3,st:"Hold",notes:"07/13 新買進,手冊待三 AI 全維度建立"}),
- // ── 美股台幣複委託 L607568 · 報價 USD、估值 TWD(現值需匯率) ──
- POS({acctId:"L607568",acctName:"台幣複委託 L607568",market:"US",ticker:"GFS",name:"GlobalFoundries",shares:5,avg:66.584,cost:10702,price:69.71,quoteCcy:"USD",valCcy:"TWD",type:"Core",sec:"半導體/晶圓代工",theme:["Semiconductor","Foundry","AI Infrastructure"],pri:"A",conf:3,st:"Hold"}),
- POS({acctId:"L607568",acctName:"台幣複委託 L607568",market:"US",ticker:"KMEM",name:"Kurv Memory Select ETF",shares:20,avg:22.85,cost:14658,price:21.82,quoteCcy:"USD",valCcy:"TWD",type:"Tactical",sec:"ETF/記憶體",theme:["Memory ETF","DRAM","NAND","HBM"],pri:"B",conf:3,st:"Take Profit",notes:"與 MU 重疊,MU 優先"}),
- POS({acctId:"L607568",acctName:"台幣複委託 L607568",market:"US",ticker:"LAES",name:"SEALSQ Corp",shares:50,avg:2.8022,cost:4504,price:2.87,quoteCcy:"USD",valCcy:"TWD",type:"Satellite",sec:"量子/資安",theme:["Quantum","Cybersecurity","High Risk Growth"],pri:"B",conf:3,st:"Hold",notes:"台幣帳戶50股,不與外幣45股合併"}),
- POS({acctId:"L607568",acctName:"台幣複委託 L607568",market:"US",ticker:"MU",name:"Micron 美光",shares:3,avg:966.403333,cost:92761,price:991.64,quoteCcy:"USD",valCcy:"TWD",type:"Core",sec:"半導體/記憶體",theme:["AI","HBM","DRAM","Memory"],pri:"A+",conf:4,st:"Hold"}),
+ // ── 美股台幣複委託 L607568 · 報價 USD、估值 TWD(現值需匯率)· V14:cost 一律報價幣別 USD ──
+ POS({acctId:"L607568",acctName:"台幣複委託 L607568",market:"US",ticker:"GFS",name:"GlobalFoundries",shares:5,avg:66.584,cost:332.92,price:69.71,quoteCcy:"USD",valCcy:"TWD",type:"Core",sec:"半導體/晶圓代工",theme:["Semiconductor","Foundry","AI Infrastructure"],pri:"A",conf:3,st:"Hold"}),
+ POS({acctId:"L607568",acctName:"台幣複委託 L607568",market:"US",ticker:"KMEM",name:"Kurv Memory Select ETF",shares:20,avg:22.85,cost:457,price:21.82,quoteCcy:"USD",valCcy:"TWD",type:"Tactical",sec:"ETF/記憶體",theme:["Memory ETF","DRAM","NAND","HBM"],pri:"B",conf:3,st:"Take Profit",notes:"與 MU 重疊,MU 優先"}),
+ POS({acctId:"L607568",acctName:"台幣複委託 L607568",market:"US",ticker:"LAES",name:"SEALSQ Corp",shares:50,avg:2.8022,cost:140.11,price:2.87,quoteCcy:"USD",valCcy:"TWD",type:"Satellite",sec:"量子/資安",theme:["Quantum","Cybersecurity","High Risk Growth"],pri:"B",conf:3,st:"Hold",notes:"台幣帳戶50股,不與外幣45股合併"}),
+ POS({acctId:"L607568",acctName:"台幣複委託 L607568",market:"US",ticker:"MU",name:"Micron 美光",shares:3,avg:966.403333,cost:2899.21,price:991.64,quoteCcy:"USD",valCcy:"TWD",type:"Core",sec:"半導體/記憶體",theme:["AI","HBM","DRAM","Memory"],pri:"A+",conf:4,st:"Hold"}),
  // ── 美股外幣複委託 G552118 · 報價與估值均 USD ──
  POS({acctId:"G552118",acctName:"外幣複委託 G552118",market:"US",ticker:"GLW",name:"Corning 康寧",shares:2,avg:211.275,cost:422.55,price:192.38,quoteCcy:"USD",valCcy:"USD",type:"Exit Candidate",sec:"光通訊/玻璃",theme:["AI Data Center","Optical","Glass"],pri:"B-",conf:2,st:"Watch"}),
  POS({acctId:"G552118",acctName:"外幣複委託 G552118",market:"US",ticker:"LAES",name:"SEALSQ Corp",shares:45,avg:3.002444,cost:135.11,price:2.87,quoteCcy:"USD",valCcy:"USD",type:"Satellite",sec:"量子/資安",theme:["Quantum","Cybersecurity","High Risk Growth"],pri:"B",conf:3,st:"Hold",notes:"外幣帳戶45股,不與台幣50股合併"}),
@@ -195,7 +195,7 @@ function seedManual(){return {
  "6213":{buildZone:null,addZone:null,tp1:null,tp2:null,tp3:null,buyBack:null,invalid:null,keySupport:null,keyResistance:null,catalysts:null,riskFactors:null,todayAdvice:null,orderSuggestion:null,lastChange:"2026-07-13 新增部位初始化,手冊待三 AI 全維度建立"}
 };}
 function freshData(){return {
- version:VERSION,
+ version:VERSION,costSchema:COST_SCHEMA,
  settings:{fxUSDTWD:null,cashTWD:null,cashUSD:null,finmindToken:null,finnhubToken:null,fees:feeDefaults(),
   targetAlloc:{"半導體/記憶體":25,"ETF":35,"PCB/CCL":15,"量子/太空/其他":10,"現金":15}},
  positions:seedPositions(),manual:seedManual(),
@@ -222,6 +222,7 @@ function freshData(){return {
 function migrate(d){
  const f=freshData(); const out=Object.assign({},f,d);
  out.version=VERSION;
+ out.costSchema=(d&&typeof d.costSchema==="number")?d.costSchema:0; // 遷移旗標只認「進場資料」自身,不吃 freshData 預設,確保舊資料必經修復
  out.settings=Object.assign({},f.settings,d.settings||{});
  out.settings.fees=Object.assign(feeDefaults(),(d.settings&&d.settings.fees)||{});
  (out.positions||[]).forEach(p=>{
@@ -229,9 +230,55 @@ function migrate(d){
   if(!p.id||p.id.indexOf("|")<0)p.id=p.acctId+"|"+p.market+"|"+p.ticker;
   if(p.realizedPL===undefined)p.realizedPL=null;
   if(!p.valuationCurrency)p.valuationCurrency=p.quoteCurrency;
-  if(p.totalCostFixed==null)p.totalCostFixed=Math.round(p.avgCost*p.shares*100)/100;
+  if(p.totalCostFixed==null)p.totalCostFixed=(p.avgCost||0)*(p.shares||0);
   if(!p.priceUpdatedAt)p.priceUpdatedAt=null;
  });
+ // ── V14 成本資料遷移(costSchema 2)──
+ // 舊資料的 totalCostFixed 可能:(a)幣別混雜(L607568 種子為 TWD、交易疊加 USD)、(b)與 avgCost×shares 脫鉤。
+ // 對每個部位驗證 |totalCostFixed − avgCost×shares| 容差;不符者依優先序重建,並記錄 migration log。
+ // 舊雲端/舊備份資料一律經本 migrate() 進場,重建後 costSchema 標記防止舊值覆蓋修正結果。
+ // 交易紀錄去重:同 txid 只保留一筆;無 txid 者補發(歷史紀錄不重放,不會重複套用)。
+ (function(){
+  const seen=new Set();
+  out.transactions=(out.transactions||[]).filter(t=>{
+   if(!t.txid)t.txid="mig-"+[t.ts,t.id,t.side,t.shares,t.price].join("|");
+   if(seen.has(t.txid))return false;seen.add(t.txid);return true;
+  });
+ })();
+ if(out.costSchema!==COST_SCHEMA){
+  const migLog=[];
+  (out.positions||[]).forEach(p=>{
+   const q=p.shares||0,avg=p.avgCost||0,tc=p.totalCostFixed;
+   const expected=avg*q;
+   const tol=Math.max(0.01,Math.abs(expected)*0.005); // 0.5% 或 0.01 報價幣別
+   if(q===0){if(tc!==0){migLog.push([p,"股數0成本歸零",tc,0]);p.totalCostFixed=0;p.avgCost=0;}return;}
+   if(typeof tc==="number"&&isFinite(tc)&&Math.abs(tc-expected)<=tol){syncDerivedCost(p);return;} // 已一致:僅重推導精度
+   // 第一優先:交易紀錄完整(自 0 重放後股數吻合)→ 由交易重建
+   const txs=(out.transactions||[]).filter(t=>t.id===p.id).slice().reverse(); // 舊→新
+   let rq=0,rc=0,ok=txs.length>0;
+   txs.forEach(t=>{
+    const f=(t.fee||0),x=(t.tax||0),s=(t.sec||0);
+    if(t.side==="Buy"){rc+=t.shares*t.price+f;rq+=t.shares;}
+    else{if(rq<=0||t.shares>rq){ok=false;return;}rc-=(rc/rq)*t.shares;rq-=t.shares;}
+   });
+   if(ok&&rq===q&&rq>0){
+    migLog.push([p,"由交易紀錄重建("+txs.length+"筆)",tc,rc]);
+    p.totalCostFixed=rc;syncDerivedCost(p);return;
+   }
+   // 第二優先:以可靠的 shares × avgCost 重建(avgCost 為使用者對帳過的均價,報價幣別)
+   migLog.push([p,"以 股數×均價 重建(交易史不完整"+(txs.length?";重放股數 "+rq+"≠"+q:";無交易紀錄")+")",tc,expected]);
+   p.totalCostFixed=expected;syncDerivedCost(p);
+  });
+  out.costSchema=COST_SCHEMA;
+  if(migLog.length){
+   out.decisionLog=out.decisionLog||[];
+   migLog.forEach(([p,how,oldV,newV])=>out.decisionLog.unshift({ts:now(),ticker:p.ticker,field:"成本遷移 V14("+p.broker+")",
+    oldVal:"totalCost "+(oldV==null?"缺":fmt(oldV,2)),newVal:"totalCost "+fmt(newV,2)+" "+p.quoteCurrency+"(含費,報價幣別)",
+    reason:how+";修正舊版幣別混雜/成本脫鉤,估值一律讀取時換匯"}));
+  }
+ }else{
+  (out.positions||[]).forEach(p=>syncDerivedCost(p)); // 已遷移:僅確保推導欄位一致
+ }
  Object.keys(out.manual||{}).forEach(k=>{const m=out.manual[k];if(m&&m.todayAction!==undefined){m.todayAdvice=m.todayAdvice??m.todayAction;delete m.todayAction;}});
  ["watchlist","aiReports","consensus","consensusHistory","scenarios","metrics","graph","majorEvents","validation","decisionLog","transactions","adoptedPlans","pendingDecisions"].forEach(k=>{if(out[k]==null)out[k]=f[k]||[];});
  if(out.integrated==null)out.integrated={};
@@ -242,7 +289,7 @@ function migrate(d){
 /* ---------- Store ---------- */
 const Store={
  data:null,
- load(){try{const r=localStorage.getItem(KEY);this.data=r?migrate(JSON.parse(r)):freshData();}catch(e){this.data=freshData();}this.persist();},
+ load(){try{const r=localStorage.getItem(KEY);this.data=migrate(r?JSON.parse(r):freshData());}catch(e){this.data=migrate(freshData());}this.persist();}, // V14:全部入口一律經 migrate(含全新種子),確保推導欄位一致
  persist(){try{localStorage.setItem(KEY,JSON.stringify(this.data));}catch(e){toast("儲存失敗:"+e.message);}},
  log(ticker,field,oldVal,newVal,reason){this.data.decisionLog.unshift({ts:now(),ticker,field,oldVal:oldVal==null?"Data Missing":String(oldVal),newVal:newVal==null?"Data Missing":String(newVal),reason:reason||"手動更新"});}
 };
@@ -254,7 +301,15 @@ const Repo={
   const p=findPos(id);if(!p)return;
   if(String(p[field])===String(value))return;
   Store.log(p.ticker,field+"("+p.broker+")",p[field],value,reason);
-  p[field]=value;p.lastUpdated=today();Store.persist();render();toast(p.ticker+" 已更新並記錄");
+  p[field]=value;
+  if(field==="shares"||field==="avgCost"){ // V14:直接編輯股數/均價 ⇒ 成本基礎同步重建,三欄位不得脫鉤
+   const q=Math.max(0,+p.shares||0),avg=Math.max(0,+p.avgCost||0);
+   const old=p.totalCostFixed;
+   p.shares=q;p.totalCostFixed=q>0?avg*q:0;syncDerivedCost(p);
+   Store.log(p.ticker,"成本連動("+p.broker+")","totalCost "+fmt(old,2),"totalCost "+fmt(p.totalCostFixed,2)+" "+p.quoteCurrency,"手動編輯 "+field+" 後自動重算(含費均價×股數)");
+   if(!assertHolding(p,"setPosition/"+field))return;
+  }
+  p.lastUpdated=today();Store.persist();render();toast(p.ticker+" 已更新並記錄");
  },
  setManual(ticker,field,value,reason){
   const m=Store.data.manual[ticker];if(!m)return;
@@ -268,22 +323,32 @@ const Repo={
   shares=Math.abs(shares);
   const F=calcFees(p,side,shares,price);
   const tag="交易:"+(side==="Buy"?"買":"賣")+" "+shares+" 股 @ "+price+"("+p.broker+")";
-  const tx={ts:today(),id,ticker:p.ticker,side,shares,price,fee:F.fee,tax:F.tax,sec:F.sec,note:note||"",realized:null};
+  const tx={ts:today(),txid:Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8),id,ticker:p.ticker,side,shares,price,fee:F.fee,tax:F.tax,sec:F.sec,note:note||"",realized:null};
+  if(!assertHolding(p,"preTx/"+side))return; // 交易前置檢查:成本基礎已損壞則擋下,不得靜默修復後照常交易
+  syncDerivedCost(p); // 通過檢查後統一推導精度
   if(side==="Buy"){
-   const prevSh=p.shares,newAvg=(p.avgCost*prevSh+price*shares)/(prevSh+shares);
-   Store.log(p.ticker,"買進("+p.broker+")",prevSh+"股@"+fmt(p.avgCost,4),(prevSh+shares)+"股@"+fmt(newAvg,4),tag+";手續費 "+F.fee);
-   p.shares+=shares;p.avgCost=newAvg;
-   p.totalCostFixed=Math.round(((p.totalCostFixed||0)+F.gross+F.fee)*100)/100; // 帳面成本含費(比照券商)
+   // V14:原子化更新——totalCostFixed(報價幣別,含費,原始精度)為唯一資料源,avgCost 由其推導
+   const prevSh=p.shares,prevAvg=p.avgCost;
+   const tradeTotalCost=F.gross+F.fee; // 本筆買進總成本 = 價金 + 手續費(報價幣別)
+   p.shares=prevSh+shares;
+   p.totalCostFixed=(p.totalCostFixed||0)+tradeTotalCost;
+   syncDerivedCost(p); // avgCost = totalCostFixed / shares(含費均價,比照券商帳面)
+   Store.log(p.ticker,"買進("+p.broker+")",prevSh+"股@"+fmt(prevAvg,4)+"(總成本 "+fmt(prevAvg*prevSh,2)+")",p.shares+"股@"+fmt(p.avgCost,4)+"(總成本 "+fmt(p.totalCostFixed,2)+" "+p.quoteCurrency+")",tag+";手續費 "+F.fee+" 已計入成本");
   }else{
    if(shares>p.shares)return toast("賣出股數超過持有("+p.shares+")");
-   const gross=(price-p.avgCost)*shares;
-   tx.realized=Math.round((gross-F.total)*100)/100; // 已實現=扣費淨額
+   // V14 移動平均成本法:配置成本自 totalCostFixed 扣除;賣出收入不是成本、不得直接扣減
+   const avgRaw=p.avgCost; // = totalCostFixed/shares(原始精度)
+   const costAllocated=avgRaw*shares;
+   const proceedsAfterFee=shares*price-F.total;
+   tx.realized=Math.round((proceedsAfterFee-costAllocated)*100)/100; // 已實現=扣費淨收入−配置成本
    p.realizedPL=Math.round(((p.realizedPL||0)+tx.realized)*100)/100;
    const remain=p.shares-shares;
-   p.totalCostFixed=p.shares>0?Math.round((p.totalCostFixed||p.avgCost*p.shares)*(remain/p.shares)*100)/100:0;
-   Store.log(p.ticker,"賣出("+p.broker+")",p.shares+"股",remain+"股;毛利 "+(gross>0?"+":"")+fmt(gross,2)+",費用 "+fmt(F.total,2)+"(手續 "+F.fee+(F.tax?"+稅 "+F.tax:"")+(F.sec?"+SEC "+F.sec:"")+"),淨已實現 "+(tx.realized>0?"+":"")+fmt(tx.realized,2)+" "+p.quoteCurrency,tag);
-   p.shares=remain; // 均價不變
+   p.shares=remain;
+   p.totalCostFixed=remain>0?(p.totalCostFixed-costAllocated):0; // 出清→成本歸零,不留幽靈成本;已實現保留
+   syncDerivedCost(p);
+   Store.log(p.ticker,"賣出("+p.broker+")",(remain+shares)+"股",remain+"股;配置成本 "+fmt(costAllocated,2)+",扣費淨收入 "+fmt(proceedsAfterFee,2)+"(手續 "+F.fee+(F.tax?"+稅 "+F.tax:"")+(F.sec?"+SEC "+F.sec:"")+"),淨已實現 "+(tx.realized>0?"+":"")+fmt(tx.realized,2)+" "+p.quoteCurrency,tag);
   }
+  if(!assertHolding(p,"addTransaction/"+side))return; // 檢查失敗:不寫入、不顯示看似合理的結果
   p.lastUpdated=today();Store.data.transactions.unshift(tx);
   applyCash(p,F.netCash,tag);
   if(side!=="Buy"&&p.shares===0)closePosition(p,"全數賣出;交易與已實現歷史保留");
@@ -368,18 +433,54 @@ async function updateQuotes(){
  finally{if(btn){btn.disabled=false;btn.textContent="⟳ 更新報價";}render();}
 }
 
-/* ---------- 計算 ---------- */
-function calc(p){
- const fx=Store.data.settings.fxUSDTWD,price=p.currentPrice;
- const mv=price!=null?price*p.shares:null; // 報價幣別市值
- const needFx=p.quoteCurrency==="USD"&&p.valuationCurrency==="TWD"; // 台幣複委託
- const value=mv==null?null:(needFx?(fx!=null?mv*fx:null):mv); // 估值幣別現值
- const cost=p.totalCostFixed!=null?p.totalCostFixed:(p.avgCost*p.shares); // 券商固定成本優先
- const pl=(value!=null&&cost!=null)?value-cost:null;
- const plPct=(pl!=null&&cost)?pl/cost*100:null;
- const toTWD=v=>v==null?null:(p.valuationCurrency==="TWD"?v:(fx!=null?v*fx:null));
- return {mv,value,cost,pl,plPct,mvTWD:toTWD(value),plTWD:toTWD(pl)};
+/* ---------- 計算(V14 唯一資料源) ----------
+ 契約:p.totalCostFixed = 該部位「報價幣別」含費總成本(原始精度,不預先四捨五入);
+      p.avgCost = totalCostFixed / shares 的推導值(只由 syncDerivedCost 寫入);
+      估值幣別(TWD/USD)一律在讀取時由 deriveHoldingMetrics 以當前匯率換算;
+      損益率一律以報價幣別計算,避免重複換匯誤差。
+ Portfolio / Dashboard / Risk / Graph / Detail / Formats 全部只讀 deriveHoldingMetrics 結果。 */
+function syncDerivedCost(p){ // 每次成本基礎變動後呼叫:推導 avgCost,並保證 qty=0 ⇒ cost=0
+ if(!(p.shares>0)){p.shares=Math.max(0,p.shares||0);p.totalCostFixed=0;p.avgCost=0;return p;}
+ if(p.totalCostFixed==null||isNaN(p.totalCostFixed))p.totalCostFixed=(p.avgCost||0)*p.shares;
+ p.avgCost=p.totalCostFixed/p.shares; // 原始精度,顯示時才四捨五入
+ return p;
 }
+function validateHolding(p,fx,stage){ // 強制一致性檢查:回傳問題陣列,呼叫端決定處置
+ const errs=[],TOL_USD=0.0001,TOL_PCT=0.01;
+ const bad=v=>v==null||typeof v!=="number"||isNaN(v)||!isFinite(v);
+ if(bad(p.shares)||p.shares<0)errs.push("shares 非法:"+p.shares);
+ if(bad(p.totalCostFixed))errs.push("totalCostFixed 非法:"+p.totalCostFixed);
+ if(bad(p.avgCost))errs.push("avgCost 非法:"+p.avgCost);
+ if(!errs.length){
+  if(p.shares===0&&Math.abs(p.totalCostFixed)>TOL_USD)errs.push("股數 0 但 totalCostFixed="+p.totalCostFixed+"(幽靈成本)");
+  if(p.shares>0&&Math.abs(p.totalCostFixed-p.avgCost*p.shares)>Math.max(TOL_USD,Math.abs(p.totalCostFixed)*TOL_PCT/100))
+   errs.push("totalCostFixed("+p.totalCostFixed+") ≠ avgCost×shares("+(p.avgCost*p.shares)+")");
+ }
+ if(errs.length)console.error("[DIOS invariant] "+(stage||"")+" "+p.id,errs);
+ return errs;
+}
+function assertHolding(p,stage){ // 寫入前檢查:失敗時不得靜默,修 UI 可見
+ const errs=validateHolding(p,Store.data&&Store.data.settings.fxUSDTWD,stage);
+ if(errs.length){toast("⚠ 成本資料不一致("+p.ticker+" "+(stage||"")+"),請至 Log 頁檢查:"+errs[0]);
+  Store.log(p.ticker,"一致性檢查失敗("+(stage||"")+")","-",errs.join(";"),"invariant validation");}
+ return !errs.length;
+}
+function deriveHoldingMetrics(p,fxOverride){ // 中央推導:所有頁面唯一讀取入口
+ const fx=fxOverride!=null?fxOverride:Store.data.settings.fxUSDTWD;
+ const price=p.currentPrice;
+ const needFx=p.quoteCurrency==="USD"&&p.valuationCurrency==="TWD"; // 台幣複委託 L607568
+ const k=needFx?(fx!=null?fx:null):1; // 報價幣別→估值幣別係數
+ const totalCostQuote=p.totalCostFixed!=null?p.totalCostFixed:(p.avgCost*p.shares); // 報價幣別成本
+ const mvQuote=price!=null?price*p.shares:null;                                      // 報價幣別市值
+ const plQuote=mvQuote!=null?mvQuote-totalCostQuote:null;                            // 報價幣別未實現
+ const plPct=(plQuote!=null&&totalCostQuote>0)?plQuote/totalCostQuote*100:null;      // 損益率:報價幣別直算
+ const value=mvQuote==null?null:(k!=null?mvQuote*k:null);        // 估值幣別現值
+ const cost=k!=null?totalCostQuote*k:null;                       // 估值幣別成本
+ const pl=(value!=null&&cost!=null)?value-cost:null;             // 估值幣別未實現
+ const toTWD=v=>v==null?null:(p.valuationCurrency==="TWD"?v:(fx!=null?v*fx:null));
+ return {mv:mvQuote,mvQuote,totalCostQuote,plQuote,value,cost,pl,plPct,mvTWD:toTWD(value),plTWD:toTWD(pl),costTWD:toTWD(cost)};
+}
+function calc(p){return deriveHoldingMetrics(p);} // 舊呼叫點相容包裝
 function aggregates(){ // 同 ticker 跨帳戶合計
  const g={};
  Store.data.positions.forEach(p=>{
@@ -533,7 +634,7 @@ function viewDetail(id){
  <div class="dgrid">
   <div class="card"><div class="clabel">現價 (${p.quoteCurrency})</div>${eNum("currentPrice",p.currentPrice,2)}</div>
   <div class="card"><div class="clabel">現值 (${p.valuationCurrency})</div><span class="mono">${c.value!=null?fmt(c.value,p.valuationCurrency==="USD"?2:0):"—"}</span><div class="sub">成本 ${fmt(c.cost,p.valuationCurrency==="USD"?2:0)}</div></div>
-  <div class="card"><div class="clabel">未實現 (${p.valuationCurrency})</div><span class="mono ${plCls(c.pl)}">${c.pl!=null?(c.pl>0?"+":"")+fmt(c.pl,p.valuationCurrency==="USD"?2:0):"—"}</span></div>
+  <div class="card"><div class="clabel">未實現 (${p.valuationCurrency})</div><span class="mono ${plCls(c.pl)}">${c.pl!=null?(c.pl>0?"+":"")+fmt(c.pl,p.valuationCurrency==="USD"?2:0):"—"}</span><div class="sub mono ${plCls(c.plPct)}">${c.plPct!=null?"報酬率 "+(c.plPct>0?"+":"")+fmt(c.plPct)+"%(依報價幣別)":""}</div></div>
   <div class="card"><div class="clabel">已實現損益</div><span class="mono ${plCls(p.realizedPL)}">${p.realizedPL!=null?(p.realizedPL>0?"+":"")+fmt(p.realizedPL,2):"—"}</span></div>
  </div>
  <div style="height:10px"></div>
@@ -755,7 +856,16 @@ function applyTradeReport(r){
    if(h.name&&h.name!==p.name){Store.log(tk,"名稱修正",p.name||"—",h.name,tag);p.name=h.name;}
    if(h.shares!=null&&+h.shares!==p.shares){Store.log(tk,"股數覆蓋("+A[1]+")",p.shares,+h.shares,tag);p.shares=+h.shares;}
    if(h.avg_cost!=null&&+h.avg_cost!==p.avgCost){Store.log(tk,"均價覆蓋("+A[1]+")",p.avgCost,+h.avg_cost,tag);p.avgCost=+h.avg_cost;}
-   p.totalCostFixed=h.book_cost!=null?+h.book_cost:Math.round(p.avgCost*p.shares*100)/100;
+   // V14:totalCostFixed 契約=報價幣別。book_cost 只有在與 均價×股數 同一數量級(±20%)時採用;
+   // 否則(常見:L607568 截圖帳面成本為 TWD)拒用並以 均價×股數 重建,記錄原因。
+   const expectQ=p.avgCost*p.shares;
+   if(h.book_cost!=null&&expectQ>0&&Math.abs(+h.book_cost-expectQ)<=expectQ*0.2){
+    p.totalCostFixed=+h.book_cost;
+   }else{
+    if(h.book_cost!=null)Store.log(tk,"book_cost 拒用("+A[1]+")",h.book_cost,fmt(expectQ,2)+" "+p.quoteCurrency,tag+";與 均價×股數 差異>20%,疑幣別不符(截圖或為 TWD 帳面成本),改以報價幣別重建");
+    p.totalCostFixed=expectQ;
+   }
+   syncDerivedCost(p);assertHolding(p,"tradeReport");
    if(h.last_price!=null){p.currentPrice=+h.last_price;p.priceUpdatedAt=(r.date||today())+" 對帳";}
    p.lastUpdated=r.date||today();
   });
@@ -1040,10 +1150,12 @@ function doAddPosition(){
   quoteCurrency:A[3],valuationCurrency:A[4],accountCurrency:A[4],marketCurrency:A[3],costCurrency:A[3],
   broker:A[1],currentPrice:px,priceUpdatedAt:now(),positionType:"Tactical",sector:"",theme:[],priority:"B",healthScore:null,confidence:3,status:"Hold",realizedPL:null,lastUpdated:today(),notes:"手動新增部位 "+today()};
  const F=calcFees(pos,"Buy",sh,px);
- pos.totalCostFixed=Math.round((F.gross+F.fee)*100)/100; // 帳面成本含手續費(比照券商)
+ pos.totalCostFixed=F.gross+F.fee; // V14:帳面成本含手續費(報價幣別,原始精度)
+ syncDerivedCost(pos); // avgCost 由總成本推導(含費),三欄位一致
+ if(!assertHolding(pos,"addPosition"))return;
  Store.data.positions.push(pos);
  if(!Store.data.manual[tk])Store.data.manual[tk]=blankManual("新增部位初始化,手冊待三 AI 報告建立");
- Store.data.transactions.unshift({ts:today(),id,ticker:tk,side:"Buy",shares:sh,price:px,fee:F.fee,tax:0,note:"新增部位建倉",realized:null});
+ Store.data.transactions.unshift({ts:today(),txid:Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,8),id,ticker:tk,side:"Buy",shares:sh,price:px,fee:F.fee,tax:0,note:"新增部位建倉",realized:null});
  applyCash(pos,F.netCash,"新增部位:買 "+sh+" 股 @ "+px);
  const wi=Store.data.watchlist.findIndex(w=>w.ticker===tk);
  if(wi>=0){Store.data.watchlist.splice(wi,1);Store.log(tk,"Watchlist","觀察中","轉為持股","買進成交,移入持股主檔");}
